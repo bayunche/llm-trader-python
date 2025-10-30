@@ -1,0 +1,24 @@
+# 基础开发镜像，支持本地构建与测试
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_NO_CACHE_DIR=off \
+    POETRY_VIRTUALENVS_CREATE=false \
+    PROJECT_ROOT=/app
+
+WORKDIR ${PROJECT_ROOT}
+
+# 安装编译依赖（scikit-learn/pyarrow 等需要）
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.dev.txt /tmp/requirements.dev.txt
+
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r /tmp/requirements.dev.txt
+
+COPY . ${PROJECT_ROOT}
+
+CMD ["bash"]

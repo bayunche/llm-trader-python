@@ -1,0 +1,16 @@
+.git
+.gitignore
+.codex/vendor
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+data_store/
+docs/
+tests/__pycache__
+*.log
+dist/
+build/
+.venv/
+.env

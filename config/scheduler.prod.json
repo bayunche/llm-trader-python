@@ -1,0 +1,29 @@
+{
+  "timezone": "Asia/Shanghai",
+  "jobs": [
+    {
+      "id": "realtime-quotes",
+      "callable_path": "llm_trader.tasks.realtime.fetch_realtime_quotes",
+      "trigger": "interval",
+      "interval_minutes": 5,
+      "kwargs": {
+        "symbols": ["600000.SH", "000001.SZ"]
+      }
+    },
+    {
+      "id": "managed-trading",
+      "callable_path": "llm_trader.tasks.managed_cycle.run_cycle",
+      "trigger": "interval",
+      "interval_minutes": 60,
+      "kwargs": {
+        "config": {
+          "session_id": "session-demo",
+          "strategy_id": "strategy-demo",
+          "symbols": ["600000.SH"],
+          "objective": "自动调度",
+          "history_start": "2024-01-01T00:00:00"
+        }
+      }
+    }
+  ]
+}

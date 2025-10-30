@@ -1,0 +1,45 @@
+{
+  "question": "哪些 FastAPI 路由需要挂载 require_api_key 依赖，哪些可以保留匿名访问？",
+  "investigation": {
+    "sources": [
+      {
+        "file": "src/llm_trader/api/app.py",
+        "notes": "FastAPI 应用通过 `app.include_router(router, prefix=\"/api\")` 聚合所有业务路由。"
+      },
+      {
+        "file": "src/llm_trader/api/routes/__init__.py",
+        "notes": "`router` 聚合 data/backtest/strategy 路由，并提供 `/health` 健康检查。"
+      },
+      {
+        "file": "src/llm_trader/api/routes/data.py",
+        "notes": "数据查询接口不包含任何依赖，直接暴露行情信息。"
+      },
+      {
+        "file": "src/llm_trader/api/routes/backtest.py",
+        "notes": "回测执行接口会触发策略评估与数据加载，需受保护。"
+      },
+      {
+        "file": "src/llm_trader/api/routes/strategy.py",
+        "notes": "策略版本查询接口返回策略元数据，也应受控。"
+      },
+      {
+        "file": "src/llm_trader/api/security.py",
+        "notes": "提供 `require_api_key` 依赖并附带限流逻辑，可用于路由守卫。"
+      }
+    ],
+    "analysis": [
+      "当前 `/api` 路由均未添加安全依赖，任何请求都能访问行情与回测功能。",
+      "健康检查 `/api/health` 主要用于部署探活，保持匿名有利于监控与反向代理配置。",
+      "数据、策略、回测接口涉及昂贵计算与潜在写操作，需统一通过 `require_api_key` 控制，并在 tests 中补充头部。",
+      "未来新增 webhook/交易接口可能位于独立路由组，亦需复用同一依赖。"
+    ]
+  },
+  "recommendation": {
+    "actions": [
+      "在 `router.include_router` 时统一设置 `dependencies=[Depends(require_api_key)]`，对 health 路由单独保留匿名访问。",
+      "更新 API 测试，在客户端 fixture 中默认注入 `X-API-Key` 头，覆盖限流分支测试。",
+      "在文档与配置中说明当 `LLM_TRADER_API_KEY` 为空时依然允许匿名，但仍执行共享限流桶。"
+    ],
+    "status": "resolved"
+  }
+}

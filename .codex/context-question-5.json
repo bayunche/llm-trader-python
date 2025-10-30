@@ -1,0 +1,37 @@
+{
+  "question": "交易模块需要怎样的存储结构与会话抽象，才能复用现有撮合引擎完成实盘日志记录？",
+  "investigation": {
+    "sources": [
+      {
+        "file": "src/llm_trader/backtest/execution.py",
+        "notes": "已有撮合逻辑支持费用、T+1，可直接复用于实时执行。"
+      },
+      {
+        "file": "src/llm_trader/backtest/models.py",
+        "notes": "Account/Order/Trade 数据结构完整，可作为交易会话的账户模型。"
+      },
+      {
+        "file": "src/llm_trader/data/storage.py",
+        "notes": "DataStoreManager 已管理数据集配置，但尚未包含交易日志相关的数据集。"
+      },
+      {
+        "file": "src/llm_trader/data/repositories/parquet.py",
+        "notes": "具备通用的写入/增量合并能力，可拓展写入订单与成交流水。"
+      }
+    ],
+    "analysis": [
+      "交易会话应复用 Account/ExecutionEngine，避免重复建模；只需封装执行流程与记录逻辑。",
+      "需要为订单、成交、权益曲线单独设置数据集，使每次执行后能即时写入 Parquet。",
+      "DataStoreManager 的模板目前仅支持 symbol/freq/date，可将 session_id 映射为 symbol，strategy_id 映射为 freq，保持统一接口。",
+      "在 repository 中新增 write_trading_* 方法即可实现持久化，并可在测试中验证合并和排序行为。"
+    ]
+  },
+  "recommendation": {
+    "actions": [
+      "扩展 DatasetKind，新增 TRADING_ORDERS/TRADING_TRADES/TRADING_EQUITY，并配置分区模板。",
+      "在 ParquetRepository 中实现对应写入方法，采用 `_merge_existing` 保障幂等。",
+      "创建 `trading/session.py`，封装执行引擎与记录逻辑，为后续自动化管道提供基础会话对象。"
+    ],
+    "status": "resolved"
+  }
+}

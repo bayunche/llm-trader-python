@@ -1,0 +1,19 @@
+{
+  "interface_contract": {
+    "checked": true,
+    "notes": "已确认数据→策略→回测现有接口，新增自动交易将复用 StrategyEngine + ExecutionEngine 并扩展 Trading 模块。"
+  },
+  "tech_choices": {
+    "checked": true,
+    "notes": "Python/FastAPI/Parquet/Streamlit 技术栈稳定，安全依赖采用 FastAPI 依赖注入，无需新增外部组件。"
+  },
+  "risks_identified": {
+    "checked": true,
+    "notes": "风险点：API 限流与依赖注入影响现有测试；自动交易需处理实时行情缺失与资金管理。已在深挖中记录缓解措施。"
+  },
+  "verification_strategy": {
+    "checked": true,
+    "notes": "可通过 pytest 覆盖安全依赖、交易执行，并在 Docker 环境运行端到端测试；将补充针对 trading 数据集的验证。"
+  },
+  "status": "ready_for_planning"
+}

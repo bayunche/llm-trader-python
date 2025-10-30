@@ -1,0 +1,47 @@
+{
+  "question": "自动交易闭环需要怎样的执行流以串联实时行情、LLM 策略与订单撮合？",
+  "investigation": {
+    "sources": [
+      {
+        "file": "src/llm_trader/data/pipelines/realtime_quotes.py",
+        "notes": "提供 `RealtimeQuotesPipeline.sync`，可定时拉取行情并写入 Parquet。"
+      },
+      {
+        "file": "src/llm_trader/strategy/llm_generator.py",
+        "notes": "暴露 `LLMStrategyGenerator.generate`，将上下文转换为规则列表。"
+      },
+      {
+        "file": "src/llm_trader/strategy/signals.py",
+        "notes": "`generate_orders_from_signals` 已能把策略信号转换为买卖订单。"
+      },
+      {
+        "file": "src/llm_trader/backtest/engine.py",
+        "notes": "`BacktestRunner` 调用 `ExecutionEngine` 执行订单，可复用为实时交易执行内核。"
+      },
+      {
+        "file": "src/llm_trader/backtest/execution.py",
+        "notes": "撮合逻辑支持 T+1、费用、税费等规则，适合直接复用。"
+      },
+      {
+        "file": "src/llm_trader/data/repositories/parquet.py",
+        "notes": "目前持久化策略信号、回测结果与实时行情，尚未覆盖交易流水。"
+      }
+    ],
+    "analysis": [
+      "已有模块覆盖数据抓取→策略生成→信号转订单→撮合执行的关键环节，只需编排器整合即可。",
+      "实时行情数据可以作为执行价格来源，也可回退到最近日线数据；需定义价格选择策略。",
+      "回测 `ExecutionEngine` 已考虑佣金、印花税与 T+1，可在实时执行中共享账户与仓位模型。",
+      "缺口：缺少 `TradingSession`（负责拉行情、调用策略、执行订单）与交易流水持久化接口。",
+      "需新增 `DatasetKind.TRADING_RECORDS` 等配置，并在 `ParquetRepository` 中实现写入方法。"
+    ]
+  },
+  "recommendation": {
+    "actions": [
+      "新增 `trading` 包，引入 `TradingEngine`（封装账户、执行引擎、持久化）与 `AutoTrader`（ orchestrator）。",
+      "使用 `RealtimeQuotesPipeline` 作为实时价格来源，必要时回退至 `load_ohlcv` 历史数据。",
+      "执行后将订单、成交、账户权益写入新建的数据集 (`trading/orders`, `trading/trades`, `trading/equity`)。",
+      "在 Stage10 进一步扩展 Webhook 与任务调度，结合 APScheduler 定时运行。"
+    ],
+    "status": "resolved"
+  }
+}

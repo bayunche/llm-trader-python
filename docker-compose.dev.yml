@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  llm-trader-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: llm-trader/dev
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      PYTHONUNBUFFERED: "1"
+    command: bash

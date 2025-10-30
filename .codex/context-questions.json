@@ -1,0 +1,28 @@
+{
+  "known": [
+    "数据采集、回测引擎、LLM 策略生成和核心 API 路由已经落地，pytest 覆盖 36 项业务场景。",
+    "服务层预置了 `require_api_key` 与限流逻辑，但尚未在 FastAPI 路由上强制执行。",
+    "交易执行模块尚未实现，计划阶段 S10 聚焦自动下单、流水记录与闭环自动化。"
+  ],
+  "unknown": [
+    {
+      "question": "哪些 FastAPI 路由需要挂载 `require_api_key` 依赖，健康检查等是否允许匿名访问？",
+      "priority": "high",
+      "blocking": true,
+      "notes": "S5.4 要求接入访问控制与限流，需要明确范围与例外，避免破坏现有测试。"
+    },
+    {
+      "question": "自动交易闭环的执行流应如何设计：实时行情 → LLM 策略 → 信号评估 → 下单 → 流水持久化？",
+      "priority": "high",
+      "blocking": true,
+      "notes": "需确认复用现有回测撮合逻辑或新增 TradingEngine，并定义接口契约。"
+    },
+    {
+      "question": "交易记录与订单流水应存储到何处、使用何种数据 schema？",
+      "priority": "medium",
+      "blocking": false,
+      "notes": "需与 `data_store` 现有目录保持一致，可能新增 DatasetKind。"
+    }
+  ],
+  "notes": "sequential-thinking 工具在当前环境中不可用，改用手动分析记录；若工具恢复需补充正式输出。"
+}

@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-trader/prod
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_TRADER_API_KEY: ${LLM_TRADER_API_KEY:-}
+    volumes:
+      - .:/app
+    command: >-
+      python scripts/run_scheduler.py config/scheduler.prod.json

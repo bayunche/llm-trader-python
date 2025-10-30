@@ -1,0 +1,46 @@
+{
+  "status": "manual_substitute",
+  "reason": "shrimp-task-manager 工具缺失，人工完成技术可行性分析。",
+  "domains": [
+    {
+      "area": "数据采集",
+      "feasibility": "中高",
+      "assumptions": [
+        "东方财富公开接口可通过 requests/httpx 获取。",
+        "采用 pandas + pyarrow 写入 Parquet，DuckDB/SQLite 负责查询。"
+      ],
+      "risks": ["接口频控与IP封禁", "数据字段变更"],
+      "mitigations": ["实现速率限制与缓存策略", "为字段增加映射配置"]
+    },
+    {
+      "area": "回测引擎",
+      "feasibility": "中",
+      "assumptions": [
+        "使用向量化 pandas 或 numba 加速撮合。",
+        "规则参数化可覆盖 T+1、涨跌停、费用等约束。"
+      ],
+      "risks": ["性能瓶颈", "复杂业务规则实现难度"],
+      "mitigations": ["先实现日线撮合再扩展分钟线", "建立回测单元测试确保正确性"]
+    },
+    {
+      "area": "策略生成",
+      "feasibility": "中",
+      "assumptions": [
+        "使用 scikit-learn、optuna / nevergrad 等现成库进行搜索与优化。",
+        "策略规则库可配置化管理。"
+      ],
+      "risks": ["搜索空间爆炸", "过拟合风险"],
+      "mitigations": ["限制特征组合规模", "使用样本外验证与惩罚项"]
+    },
+    {
+      "area": "服务与仪表盘",
+      "feasibility": "高",
+      "assumptions": [
+        "FastAPI+Uvicorn 提供REST接口。",
+        "Streamlit/Dash 提供交互仪表盘。"
+      ],
+      "risks": ["数据同步延迟", "前后端数据契约不一致"],
+      "mitigations": ["集中数据访问层", "定义 pydantic schema 保持一致"]
+    }
+  ]
+}

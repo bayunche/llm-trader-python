@@ -1,0 +1,23 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Virtual environments
+.venv/
+venv/
+
+# Data & reports
+data_store/
+reports/
+
+# Editor & OS specific
+.DS_Store
+Thumbs.db
+
+# Project specific
+.codex/vendor/
+.codex/testing.md.log
