@@ -22,4 +22,6 @@ RUN apt-get update \
 
 COPY . ${PROJECT_ROOT}
 
-ENTRYPOINT ["python", "scripts/run_scheduler.py"]
+RUN chmod +x docker/entrypoint.sh
+
+ENTRYPOINT ["bash", "docker/entrypoint.sh"]

@@ -33,6 +33,7 @@ class DatasetKind(str, Enum):
     TRADING_TRADES = "trading_trades"
     TRADING_EQUITY = "trading_equity"
     STRATEGY_LLM_LOGS = "strategy_llm_logs"
+    STRATEGY_PROMPTS = "strategy_prompts"
 
 
 @dataclass(frozen=True)
@@ -246,6 +247,14 @@ def default_manager(base_dir: Optional[Path] = None) -> DataStoreManager:
             partition_template="strategy={symbol}/session={freq}/date={date}",
             filename_template="logs.jsonl",
             description="LLM 策略提示与响应记录",
+        )
+    )
+    manager.register(
+        DatasetConfig(
+            kind=DatasetKind.STRATEGY_PROMPTS,
+            relative_dir="prompts/templates",
+            filename_template="{symbol}.txt",
+            description="可编辑提示词模板（symbol=模板名称）",
         )
     )
     return manager

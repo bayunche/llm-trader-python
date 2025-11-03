@@ -27,6 +27,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-drawdown", type=float, default=None, help="最大回撤阈值，例如 0.1")
     parser.add_argument("--max-position-ratio", type=float, default=None, help="单标的最大仓位占比，例如 0.3")
     parser.add_argument("--no-only-latest", action="store_true")
+    parser.add_argument(
+        "--execution-mode",
+        choices=["sandbox", "live"],
+        default=None,
+        help="交易执行模式（默认读取 TRADING_EXECUTION_MODE）",
+    )
     return parser.parse_args()
 
 
@@ -46,6 +52,7 @@ def main() -> None:
     only_latest = settings.only_latest_bar
     if args.no_only_latest:
         only_latest = False
+    execution_mode = args.execution_mode or settings.execution_mode
 
     if not symbols:
         raise SystemExit("未指定交易标的，请通过 --symbols 或 TRADING_SYMBOLS 配置")
@@ -67,6 +74,7 @@ def main() -> None:
         llm_base_url=llm_base_url,
         only_latest_bar=only_latest,
         symbol_universe_limit=settings.symbol_universe_limit,
+        execution_mode=execution_mode,
     )
 
     risk_settings = get_settings().risk

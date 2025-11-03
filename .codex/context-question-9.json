@@ -1,0 +1,28 @@
+{
+  "question": "当前 LLM 策略提示词如何定义，是否支持配置化修改？",
+  "priority": "high",
+  "reason": "需要在仪表盘提供提示词管理与默认模板，需要先了解现有生成逻辑与可扩展性。",
+  "investigation_timestamp": "2025-11-03T16:08:45+08:00",
+  "findings": [
+    {
+      "evidence": "LLMStrategyGenerator._build_prompt 在代码中内联中文模板，未暴露配置或外部输入。",
+      "paths": [
+        "src/llm_trader/strategy/llm_generator.py:72"
+      ]
+    },
+    {
+      "evidence": "仪表盘当前未提供提示词输入项，仅展示日志与策略信息。",
+      "paths": [
+        "dashboard/app.py"
+      ]
+    },
+    {
+      "evidence": "策略生成上下文结构 LLMStrategyContext 仅包含 objective/symbols/indicators/historical_summary，无额外 prompt 字段。",
+      "paths": [
+        "src/llm_trader/strategy/llm_generator.py",
+        "src/llm_trader/trading/orchestrator.py"
+      ]
+    }
+  ],
+  "conclusion": "提示词模板完全写死于 _build_prompt，需要引入配置与持久化机制以支持用户自定义，并在仪表盘提供修改入口。"
+}

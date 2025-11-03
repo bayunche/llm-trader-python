@@ -11,7 +11,10 @@ import pandas as pd
 from llm_trader.backtest.models import Order, OrderSide
 from llm_trader.data import DatasetKind, default_manager
 from llm_trader.data.repositories.parquet import ParquetRepository
+import pytest
+
 from llm_trader.trading import TradingSession, TradingSessionConfig
+from llm_trader.trading.execution_adapters import create_execution_adapter
 
 
 def _build_session(tmp_path: Path) -> TradingSession:
@@ -73,3 +76,24 @@ def test_trading_session_executes_and_persists(tmp_path: Path) -> None:
     positions_payload = json.loads(equity_df.iloc[-1]["positions"])
     assert positions_payload[0]["symbol"] == "600000.SH"
     assert session.account.cash < 100000.0
+
+
+def test_trading_session_live_mode_raises(tmp_path: Path) -> None:
+    session = _build_session(tmp_path)
+    session.adapter = create_execution_adapter("live")
+    dt = datetime(2024, 1, 2, 9, 30)
+    order = Order(
+        order_id="order-1",
+        symbol="600000.SH",
+        side=OrderSide.BUY,
+        volume=100,
+        price=10.0,
+        created_at=dt,
+    )
+
+    def price_lookup(symbol: str, _side: OrderSide) -> float:
+        assert symbol == "600000.SH"
+        return 10.0
+
+    with pytest.raises(NotImplementedError):
+        session.execute(dt, [order], price_lookup)

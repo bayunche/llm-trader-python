@@ -15,6 +15,9 @@ from llm_trader.backtest.execution import ExecutionConfig, ExecutionEngine
 from llm_trader.backtest.models import Account, Order, OrderSide, Position, Trade
 from llm_trader.data.repositories.parquet import ParquetRepository
 
+from .execution_adapters import ExecutionAdapter, SandboxExecutionAdapter
+from .brokers.base import BrokerClient
+
 
 PriceLookup = Callable[[str, OrderSide], float]
 
@@ -37,11 +40,13 @@ class TradingSession:
         *,
         repository: Optional[ParquetRepository] = None,
         execution_config: Optional[ExecutionConfig] = None,
+        adapter: Optional[ExecutionAdapter] = None,
     ) -> None:
         self.config = config
         self.account = Account(cash=config.initial_cash)
         self.repository = repository or ParquetRepository()
         self.execution_engine = ExecutionEngine(execution_config)
+        self.adapter = adapter or SandboxExecutionAdapter()
 
     def execute(
         self,
@@ -51,9 +56,65 @@ class TradingSession:
     ) -> List[Trade]:
         """执行订单并记录订单、成交及账户权益。"""
 
+        return self.adapter.execute(self, dt, orders, price_lookup)
+
+    def _execute_sandbox(
+        self,
+        dt: datetime,
+        orders: Sequence[Order],
+        price_lookup: PriceLookup,
+    ) -> List[Trade]:
+        """沙盒执行路径，复用本地撮合引擎。"""
+
         trades = self.execution_engine.execute(self.account, orders, price_lookup, dt)
         self._record(dt, orders, trades, price_lookup)
         return trades
+
+    def _execute_live(
+        self,
+        dt: datetime,
+        orders: Sequence[Order],
+        price_lookup: PriceLookup,
+        broker_client: BrokerClient,
+    ) -> List[Trade]:
+        """实盘执行路径，委托给券商客户端。"""
+
+        trades = broker_client.submit_orders(orders, dt)
+        self._settle_trades(orders, trades, dt)
+        self._record(dt, orders, trades, price_lookup)
+        broker_client.sync_positions()
+        return trades
+
+    def _settle_trades(
+        self,
+        orders: Sequence[Order],
+        trades: Sequence[Trade],
+        trading_dt: datetime,
+    ) -> None:
+        order_map = {order.order_id: order for order in orders}
+        for trade in trades:
+            order = order_map.get(trade.order_id)
+            if order:
+                order.status = "filled"
+                order.filled_volume = trade.volume
+                order.filled_amount = trade.price * trade.volume
+            if trade.side == OrderSide.BUY:
+                total_cost = trade.price * trade.volume + trade.fee + trade.tax
+                self.account.cash -= total_cost
+                position = self.account.get_position(trade.symbol)
+                position.add_lot(trade.volume, trade.price, trading_dt)
+            else:
+                position = self.account.positions.get(trade.symbol)
+                if position:
+                    proceeds = trade.price * trade.volume - trade.fee - trade.tax
+                    allowed_before = trading_dt
+                    position.remove_volume(trade.volume, before=allowed_before)
+                    self.account.cash += proceeds
+                    if position.is_empty():
+                        del self.account.positions[trade.symbol]
+                else:
+                    self.account.cash += trade.price * trade.volume - trade.fee - trade.tax
+            self.account.trades.append(trade)
 
     def _record(
         self,

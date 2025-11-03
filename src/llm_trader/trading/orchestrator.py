@@ -18,13 +18,18 @@ import pandas as pd
 
 from llm_trader.api.utils import load_ohlcv
 from llm_trader.backtest.models import Order, OrderSide
-from llm_trader.strategy import LLMStrategyLogRepository, generate_orders_from_signals
+from llm_trader.strategy import (
+    LLMStrategyLogRepository,
+    PromptTemplateManager,
+    generate_orders_from_signals,
+)
 from llm_trader.strategy.engine import StrategyEngine
 from llm_trader.strategy.llm_generator import (
     LLMStrategyContext,
     LLMStrategyGenerator,
     LLMStrategySuggestion,
 )
+from llm_trader.trading.execution_adapters import create_execution_adapter
 from llm_trader.trading.session import TradingSession, TradingSessionConfig
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
 from llm_trader.data.pipelines.symbols import SymbolsPipeline
@@ -50,6 +55,7 @@ class TradingCycleConfig:
     llm_base_url: Optional[str] = None
     only_latest_bar: bool = True  # 只对最近一个 bar 生成订单，避免重复建仓
     symbol_universe_limit: Optional[int] = None
+    execution_mode: str = "sandbox"
 
 
 def run_ai_trading_cycle(
@@ -72,11 +78,16 @@ def run_ai_trading_cycle(
 
     summary = _summarize_quotes(quotes)
 
-    llm = generator or LLMStrategyGenerator(
-        model=config.llm_model,
-        api_key=config.llm_api_key,
-        base_url=config.llm_base_url,
-    )
+    if generator is None:
+        template_manager = PromptTemplateManager()
+        llm = LLMStrategyGenerator(
+            model=config.llm_model,
+            api_key=config.llm_api_key,
+            base_url=config.llm_base_url,
+            template_manager=template_manager,
+        )
+    else:
+        llm = generator
     context = LLMStrategyContext(
         objective=config.objective,
         symbols=candidate_symbols,
@@ -120,12 +131,14 @@ def run_ai_trading_cycle(
     if pipeline_symbols != candidate_symbols:
         quotes = pipeline.sync(pipeline_symbols)
 
+    adapter = create_execution_adapter(getattr(config, "execution_mode", "sandbox"))
     session = trading_session or TradingSession(
         TradingSessionConfig(
             session_id=config.session_id,
             strategy_id=config.strategy_id,
             initial_cash=config.initial_cash,
-        )
+        ),
+        adapter=adapter,
     )
 
     bars = load_ohlcv_fn(pipeline_symbols, config.freq, config.history_start, config.history_end)
@@ -146,6 +159,7 @@ def run_ai_trading_cycle(
         llm_api_key=config.llm_api_key,
         llm_base_url=config.llm_base_url,
         only_latest_bar=config.only_latest_bar,
+        execution_mode=config.execution_mode,
     )
 
     orders_by_dt = _generate_orders(bars, suggestion, derived_config)

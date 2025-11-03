@@ -70,4 +70,5 @@ print(path)
 
 - 增加更多基础指标或衍生指标时，仅需补充 `DatasetKind` 与 `DatasetConfig`。
 - 若需要分布式存储（如 S3），可替换 `data_store_dir` 实现，保持接口不变。
-- 数据质量校验模块将基于 Schema 对落盘数据进行验证，保证字段一致性。
+- `tests/data/regression` 将存放数据质量回归样本，通过 pytest 校验字段、一致性与分区结构。
+- `scripts/healthcheck.py` 会检测状态文件与提示词模板；后续可扩展为读取回归数据并执行质量校验。

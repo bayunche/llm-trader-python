@@ -71,6 +71,18 @@ def _env_list(key: str, default: List[str]) -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+_VALID_EXECUTION_MODES = {"sandbox", "live"}
+
+
+def _env_execution_mode(key: str, default: str = "sandbox") -> str:
+    """解析交易执行模式，只允许 sandbox/live，两者之外回退为默认值。"""
+
+    raw = _getenv(key, default).lower()
+    if raw in _VALID_EXECUTION_MODES:
+        return raw
+    return default.lower()
+
+
 @dataclass
 class DataStoreSettings:
     """数据存储相关配置。"""
@@ -157,6 +169,21 @@ class TradingSettings:
     )
     llm_base_url: str = field(default_factory=lambda: _getenv("TRADING_LLM_BASE_URL", ""))
     symbol_universe_limit: int = field(default_factory=lambda: _env_int("TRADING_SYMBOL_UNIVERSE_LIMIT", 200))
+    execution_mode: str = field(
+        default_factory=lambda: _env_execution_mode("TRADING_EXECUTION_MODE", "sandbox")
+    )
+    broker_provider: str = field(default_factory=lambda: _getenv("TRADING_BROKER_PROVIDER", "mock"))
+    broker_account: str = field(default_factory=lambda: _getenv("TRADING_BROKER_ACCOUNT", "demo-account"))
+    broker_base_url: str = field(default_factory=lambda: _getenv("TRADING_BROKER_BASE_URL", ""))
+    broker_api_key: str = field(default_factory=lambda: _getenv("TRADING_BROKER_API_KEY", ""))
+    report_output_dir: str = field(default_factory=lambda: _getenv("REPORT_OUTPUT_DIR", "reports"))
+
+
+@dataclass
+class MonitoringSettings:
+    """监控与告警配置。"""
+
+    channel: str = field(default_factory=lambda: _getenv("MONITORING_ALERT_CHANNEL", "log"))
 
 
 @dataclass
@@ -170,6 +197,7 @@ class AppSettings:
     logging: LoggingSettings = field(default_factory=LoggingSettings)
     risk: RiskSettings = field(default_factory=RiskSettings)
     trading: TradingSettings = field(default_factory=TradingSettings)
+    monitoring: MonitoringSettings = field(default_factory=MonitoringSettings)
 
 
 @lru_cache(maxsize=1)
@@ -185,6 +213,7 @@ __all__ = [
     "ApiSettings",
     "SchedulerSettings",
     "LoggingSettings",
+    "MonitoringSettings",
     "RiskSettings",
     "TradingSettings",
     "get_settings",

@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "已确认数据→策略→回测现有接口，新增自动交易将复用 StrategyEngine + ExecutionEngine 并扩展 Trading 模块。"
+    "notes": "已明确全流程入口（scripts/run_full_pipeline.py、docker/entrypoint.sh）与核心配置（TRADING_EXECUTION_MODE、REPORT_OUTPUT_DIR），可在重构中拆分任务执行与仪表盘启动，并保持 TradingCycleConfig/AutoTradingConfig 契约不变。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "Python/FastAPI/Parquet/Streamlit 技术栈稳定，安全依赖采用 FastAPI 依赖注入，无需新增外部组件。"
+    "notes": "继续沿用 Python 3.10 + pandas + Streamlit + 自研撮合引擎；Docker 单服务方案可保留，计划通过 bash/Python 脚本编排分阶段执行及错误处理，无需新增依赖。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "风险点：API 限流与依赖注入影响现有测试；自动交易需处理实时行情缺失与资金管理。已在深挖中记录缓解措施。"
+    "notes": "风险包括：run_full_pipeline 失败导致容器退出、live 模式未实现但可能被误用、文档与验证覆盖不足。已在深挖笔记中记录应对方案。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "可通过 pytest 覆盖安全依赖、交易执行，并在 Docker 环境运行端到端测试；将补充针对 trading 数据集的验证。"
+    "notes": "将新增 pytest 覆盖执行模式切换、扩充 verification.md 步骤，并在 Docker 环境提供冒烟脚本验证沙盒流程；计划在重构后记录测试输出至 .codex/testing.md。"
   },
   "status": "ready_for_planning"
 }

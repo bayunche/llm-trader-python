@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 
-from llm_trader.reports import ReportBuilder, ReportPayload
+from llm_trader.reports import ReportBuilder, ReportPayload, ReportWriter
 from llm_trader.reports.loader import load_report_payload
 
 
@@ -30,11 +30,16 @@ def main() -> None:
         },
         equity_curve=data.get("equity", []),
         trades=data.get("trades", []),
+        orders=data.get("orders", []),
         llm_logs=data.get("logs", []),
     )
     builder = ReportBuilder()
-    summary = builder.build(payload)
-    print(f"Report generated: {summary}")
+    result = builder.build(payload)
+    writer = ReportWriter(args.output)
+    files = writer.write(result)
+    print("Report generated:")
+    for name, path in files.items():
+        print(f"- {name}: {path}")
 
 
 if __name__ == "__main__":

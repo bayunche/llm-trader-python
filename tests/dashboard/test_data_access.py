@@ -102,3 +102,49 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     assert "strategy-ai" in strategies
     assert {"strategy_id": "strategy-ai", "session_id": "session-1"} in sessions
     assert versions and versions[0].version_id == "v1"
+
+
+def test_load_pipeline_status_success(tmp_path, monkeypatch) -> None:
+    status_dir = tmp_path / "reports"
+    status_dir.mkdir(parents=True)
+    status_file = status_dir / "status.json"
+    payload = {
+        "execution_mode": "sandbox",
+        "warnings": [],
+        "stages": [{"name": "preflight", "status": "success"}],
+        "updated_at": "2024-01-01T00:00:00",
+    }
+    status_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("LLM_TRADER_PIPELINE_STATUS", str(status_file))
+
+    info = data.load_pipeline_status()
+    assert info["available"] is True
+    assert info["data"]["execution_mode"] == "sandbox"
+
+
+def test_load_pipeline_status_missing(tmp_path, monkeypatch) -> None:
+    status_dir = tmp_path / "reports"
+    monkeypatch.setenv("REPORT_OUTPUT_DIR", str(status_dir))
+    monkeypatch.delenv("LLM_TRADER_PIPELINE_STATUS", raising=False)
+
+    info = data.load_pipeline_status()
+    assert info["available"] is False
+    assert "不存在" in info["error"]
+
+
+def test_prompt_template_crud(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    # 确保默认模板可列出
+    templates = data.list_prompt_templates()
+    assert "strategy" in templates
+
+    saved = data.save_prompt_template("strategy", "测试模板：{objective}")
+    assert saved["source"] == "custom"
+    assert "测试模板" in saved["content"]
+
+    loaded = data.load_prompt_template("strategy")
+    assert loaded["content"] == "测试模板：{objective}"
+    assert loaded["source"] == "custom"
+
+    reset = data.reset_prompt_template("strategy")
+    assert reset["source"] == "default"

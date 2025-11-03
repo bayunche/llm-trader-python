@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence
 
 from llm_trader.strategy.engine import RuleConfig
+from llm_trader.strategy.prompts import PromptTemplateManager
 
 try:  # pragma: no cover - 在测试中会通过依赖注入替代
     from openai import OpenAI
@@ -44,11 +45,15 @@ class LLMStrategyGenerator:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         completion_fn: Optional[Callable[[str], str]] = None,
+        template_manager: Optional[PromptTemplateManager] = None,
+        template_name: str = "strategy",
     ) -> None:
         self.model = model
         self._base_url = base_url
         self._completion_fn = completion_fn
         self._client = None
+        self._template_manager = template_manager or PromptTemplateManager()
+        self._template_name = template_name
         self.last_prompt: Optional[str] = None
         self.last_raw_response: Optional[str] = None
         if completion_fn is None:
@@ -72,24 +77,17 @@ class LLMStrategyGenerator:
     def _build_prompt(self, context: LLMStrategyContext) -> str:
         symbols_text = ", ".join(context.symbols)
         indicators_text = ", ".join(context.indicators)
-        prompt = f"""
-你是一名量化分析师，需要根据输入的背景和历史表现生成可执行的股票策略规则。
-请输出 JSON，包含字段：
-* description: 策略概述（中文）
-* selected_symbols: 数组，需从候选标的中挑选 1-5 个用于交易
-* rules: 数组，每项含 indicator, column, params(对象), operator, threshold
-
-约束：
-1. 指标必须来自候选集合：{indicators_text}
-2. 阈值为数值，operator 仅允许 ">", ">=", "<", "<=", "cross_up", "cross_down"
-3. params 需是 JSON 对象，如 {{"window": 20}}
-4. 至少返回 1 条规则
-5. selected_symbols 不能为空，需使用候选标的：{symbols_text}
-
-目标：{context.objective}
-标的：{symbols_text}
-历史表现摘要：{context.historical_summary}
-"""
+        template = self._template_manager.load_template(self._template_name)
+        try:
+            prompt = template.content.format(
+                objective=context.objective,
+                symbols=symbols_text,
+                indicators=indicators_text,
+                historical_summary=context.historical_summary,
+            )
+        except KeyError as exc:
+            missing = exc.args[0]
+            raise ValueError(f"提示词模板缺少占位符：{missing}") from exc
         return prompt.strip()
 
     def _invoke_model(self, prompt: str) -> str:

@@ -1,31 +1,28 @@
 {
   "known": [
-    "数据采集、回测引擎、LLM 策略生成和核心 API 路由已经落地，pytest 覆盖 36 项业务场景。",
-    "服务层预置了 `require_api_key` 与限流逻辑，但尚未在 FastAPI 路由上强制执行。",
-    "交易执行模块尚未实现，计划阶段 S10 聚焦自动下单、流水记录与闭环自动化。",
-    "交易循环、调度与自动化回测参数现已统一读取 `.env` 中的 `TRADING_*` 配置，支持容器化部署调整。",
-    "LLM 调用支持通过 `TRADING_LLM_BASE_URL` 覆盖 OpenAI 兼容端点，便于自建或多模型聚合 API 接入。",
-    "实时行情管道在未指定标的时，会读取证券主表自动构建候选池，省去手工维护列表。"
+    "TRADING_EXECUTION_MODE 默认 sandbox，已在配置解析与管线预检中限制 live 模式执行。",
+    "PipelineController 会将执行阶段与警示写入 REPORT_OUTPUT_DIR/status.json，并由仪表盘读取展示。",
+    "仪表盘当前展示策略日志、资金曲线等信息，但尚未提供提示词编辑入口。"
   ],
   "unknown": [
     {
-      "question": "哪些 FastAPI 路由需要挂载 `require_api_key` 依赖，健康检查等是否允许匿名访问？",
+      "question": "策略提示词模板需要存放在哪里，并如何设计默认模板与用户自定义的合并逻辑？",
       "priority": "high",
       "blocking": true,
-      "notes": "S5.4 要求接入访问控制与限流，需要明确范围与例外，避免破坏现有测试。"
+      "notes": "需确认存储介质（本地文件、配置仓库或数据库）以及加载优先级，确保容器化环境可写。"
     },
     {
-      "question": "自动交易闭环的执行流应如何设计：实时行情 → LLM 策略 → 信号评估 → 下单 → 流水持久化？",
+      "question": "仪表盘提供提示词修改后如何持久化并影响后续 LLMStrategyGenerator 的生成流程？",
       "priority": "high",
       "blocking": true,
-      "notes": "需确认复用现有回测撮合逻辑或新增 TradingEngine，并定义接口契约。"
+      "notes": "须定义接口或服务层调用，避免直接写入源码，考虑与 PipelineController 的集成。"
     },
     {
-      "question": "交易记录与订单流水应存储到何处、使用何种数据 schema？",
+      "question": "多策略/多会话场景下提示词是否区分策略、执行模式或场景，需要怎样的版本管理？",
       "priority": "medium",
       "blocking": false,
-      "notes": "需与 `data_store` 现有目录保持一致，可能新增 DatasetKind。"
+      "notes": "可能需要按策略或模板类型分类存储，避免互相覆盖。"
     }
   ],
-  "notes": "sequential-thinking 工具在当前环境中不可用，改用手动分析记录；若工具恢复需补充正式输出。"
+  "notes": "新增需求聚焦提示词配置与仪表盘编辑能力，后续规划需围绕存储、加载和 UI 修改展开。"
 }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -12,11 +14,81 @@ from llm_trader.api.utils import (
     load_trading_trades,
 )
 from llm_trader.data import DatasetKind, default_manager
-from llm_trader.strategy import StrategyRepository, StrategyVersion
+from llm_trader.strategy import PromptTemplateManager, StrategyRepository, StrategyVersion
 
 
 def _repository(base_dir: Optional[Path] = None) -> StrategyRepository:
     return StrategyRepository(base_dir=base_dir)
+
+
+def _resolve_status_path(status_path: Optional[Path | str] = None) -> Path:
+    if status_path is not None:
+        return Path(status_path)
+    env_path = os.getenv("LLM_TRADER_PIPELINE_STATUS")
+    if env_path:
+        return Path(env_path)
+    base_dir = Path(os.getenv("REPORT_OUTPUT_DIR", "reports"))
+    filename = os.getenv("PIPELINE_STATUS_FILENAME", "status.json")
+    return base_dir / filename
+
+
+def load_pipeline_status(status_path: Optional[Path | str] = None) -> Dict[str, object]:
+    """读取自动化流程状态文件，供仪表盘展示。"""
+
+    path = _resolve_status_path(status_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"available": False, "path": str(path), "error": "状态文件不存在"}
+    except OSError as exc:
+        return {"available": False, "path": str(path), "error": f"无法读取状态文件：{exc}"}
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return {"available": False, "path": str(path), "error": f"状态文件格式错误：{exc}"}
+    return {"available": True, "path": str(path), "data": data}
+
+
+def list_prompt_templates() -> List[str]:
+    """列出可编辑的提示词模板名称。"""
+
+    return _PROMPT_MANAGER.list_templates()
+
+
+def load_prompt_template(name: str) -> Dict[str, object]:
+    """加载指定模板，返回内容与元信息。"""
+
+    template = _PROMPT_MANAGER.load_template(name)
+    return {
+        "name": template.name,
+        "content": template.content,
+        "source": template.source,
+        "updated_at": template.updated_at,
+    }
+
+
+def save_prompt_template(name: str, content: str) -> Dict[str, object]:
+    """保存模板内容并返回最新状态。"""
+
+    template = _PROMPT_MANAGER.save_template(name, content)
+    return {
+        "name": template.name,
+        "content": template.content,
+        "source": template.source,
+        "updated_at": template.updated_at,
+    }
+
+
+def reset_prompt_template(name: str) -> Dict[str, object]:
+    """重置模板为默认内容。"""
+
+    template = _PROMPT_MANAGER.reset_template(name)
+    return {
+        "name": template.name,
+        "content": template.content,
+        "source": template.source,
+        "updated_at": template.updated_at,
+    }
 
 
 def get_orders(strategy_id: str, session_id: str, limit: Optional[int] = None) -> List[dict]:
@@ -92,4 +164,10 @@ __all__ = [
     "list_strategy_versions",
     "list_strategy_ids",
     "list_strategy_sessions",
+    "load_pipeline_status",
+    "list_prompt_templates",
+    "load_prompt_template",
+    "save_prompt_template",
+    "reset_prompt_template",
 ]
+_PROMPT_MANAGER = PromptTemplateManager()

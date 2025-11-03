@@ -106,6 +106,7 @@ def test_full_automation_executes(monkeypatch) -> None:
     result = run_full_automation(config, load_ohlcv_fn=_load_mock_bars)
     assert result.status == "executed"
     assert result.backtest_metrics is not None
+    assert result.report_paths is None
 
 
 def test_full_automation_rejects_on_backtest(monkeypatch) -> None:

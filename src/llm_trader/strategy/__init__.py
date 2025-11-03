@@ -6,6 +6,7 @@ from .generator import RuleSpace, StrategyCandidate, StrategyGenerator
 from .llm_generator import LLMStrategyContext, LLMStrategyGenerator, LLMStrategySuggestion
 from .repository import StrategyRepository, StrategyVersion
 from .logger import LLMStrategyLogRepository
+from .prompts import PromptTemplate, PromptTemplateManager
 from .signals import generate_orders_from_signals
 
 __all__ = [
@@ -21,5 +22,7 @@ __all__ = [
     "LLMStrategyGenerator",
     "LLMStrategyContext",
     "LLMStrategySuggestion",
+    "PromptTemplateManager",
+    "PromptTemplate",
     "generate_orders_from_signals",
 ]

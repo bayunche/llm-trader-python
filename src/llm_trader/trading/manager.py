@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from llm_trader.config import get_settings
+from llm_trader.monitoring import AlertEmitter
+from .alerts import TradingAlertService
 
 from .orchestrator import TradingCycleConfig, run_ai_trading_cycle
 from .policy import RiskDecision, RiskPolicy, RiskThresholds
@@ -43,6 +45,14 @@ def run_managed_trading_cycle(
     equity_curve = session.account.equity_curve
     positions = session.snapshot_positions()
     decision = policy.evaluate(equity_curve, positions)
+    if not decision.proceed:
+        alert = TradingAlertService(AlertEmitter(channel=get_settings().monitoring.channel))
+        reason = "; ".join(decision.alerts) if decision.alerts else "风控阈值触发"
+        alert.risk_blocked(
+            strategy_id=config.strategy_id,
+            session_id=config.session_id,
+            reason=reason,
+        )
     return ManagedTradingResult(decision=decision, raw_result=result)
 
 

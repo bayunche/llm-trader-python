@@ -1,5 +1,5 @@
-"""监控与告警模块。"""
+"""监控模块导出。"""
 
-from .alerts import AlertEmitter
+from .alerts import AlertEmitter, AlertChannel
 
-__all__ = ["AlertEmitter"]
+__all__ = ["AlertEmitter", "AlertChannel"]

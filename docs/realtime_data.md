@@ -41,3 +41,9 @@ python scripts/run_realtime_scheduler.py --interval 1
 - 接口存在速率限制，建议结合阶段 8 的监控与限流配置使用。
 - 落盘文件按日期追加，可配合 BI/Streamlit 仪表盘进行实时展示。
 - 若需与大模型策略生成联动，可结合 `StrategyRepository` 自动登记最新信号。
+
+## 5. 自动化状态文件
+
+- Docker/脚本入口统一将执行状态写入 `${REPORT_OUTPUT_DIR}/${PIPELINE_STATUS_FILENAME}`（默认 `reports/status.json`）。
+- 文件中包含 `execution_mode`、`warnings`、`stages` 等字段，Streamlit 仪表盘会自动读取并提示失败/阻断阶段。
+- 若实时行情同步阶段异常，状态文件会记录 `data_sync` 阶段的失败信息，可据此快速定位数据源问题。

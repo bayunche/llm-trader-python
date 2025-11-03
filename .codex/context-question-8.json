@@ -1,0 +1,35 @@
+{
+  "question": "文档是否充分说明 sandbox/live 切换及 live 模式的限制？",
+  "priority": "high",
+  "reason": "用户要求通过 .env 切换真实交易，并强调非真实交易时要使用沙盒；若文档与验证流程未明确说明，用户可能误以为 live 模式已可用。",
+  "investigation_timestamp": "2025-11-03T15:28:26+08:00",
+  "findings": [
+    {
+      "evidence": "README.md 已新增“实盘执行仍为占位实现”提示，并在配置章节说明 live 模式需后续券商执行器配合，但未给出具体风险警示与禁用说明。",
+      "paths": [
+        "README.md:21",
+        "README.md:62"
+      ]
+    },
+    {
+      "evidence": ".env.example 仅简单标注“sandbox（沙盒撮合）或 live（实盘执行）”，缺少进一步的告警文案或使用条件。",
+      "paths": [
+        ".env.example:54-57"
+      ]
+    },
+    {
+      "evidence": "verification.md 尚未记录针对 sandbox/live 切换的验证步骤或结果，无法证明切换逻辑经过测试。",
+      "paths": [
+        "verification.md"
+      ]
+    },
+    {
+      "evidence": "docs 目录下的策略与数据文档未提及执行模式切换，也缺少对 live 模式不可用现状的提醒。",
+      "paths": [
+        "docs/strategy_llm.md",
+        "docs/realtime_data.md"
+      ]
+    }
+  ],
+  "conclusion": "核心文档虽有初步提示，但缺少统一而醒目的警示与验证记录；需在 README、.env.example、docs、verification.md 等处同步强化说明，并规划测试示例覆盖配置切换。"
+}

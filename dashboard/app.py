@@ -26,6 +26,49 @@ else:
 from llm_trader.strategy.llm_generator import LLMStrategyContext, LLMStrategyGenerator
 
 
+def _render_pipeline_status() -> None:
+    """展示自动化流程最新状态。"""
+
+    info = data.load_pipeline_status()
+    status_path = info.get("path")
+    if not info.get("available"):
+        message = info.get("error") or "未检测到自动化流程状态文件"
+        if status_path:
+            st.info(f"{message}（期望路径：{status_path}）")
+        else:
+            st.info(message)
+        return
+
+    status_data = info.get("data") or {}
+    st.subheader("最新自动化状态")
+    if status_path:
+        st.caption(f"状态文件：{status_path}")
+
+    stages = status_data.get("stages") or []
+    col_mode, col_stage = st.columns(2)
+    with col_mode:
+        st.metric("执行模式", status_data.get("execution_mode", "未知"))
+    with col_stage:
+        st.metric("阶段数", len(stages))
+
+    warnings = status_data.get("warnings") or []
+    for warning in warnings:
+        st.warning(warning)
+
+    if stages:
+        stage_df = pd.DataFrame(stages)
+        if "finished_at" in stage_df.columns:
+            stage_df = stage_df.sort_values("finished_at", na_position="last")
+        display_cols = [col for col in ["name", "status", "detail", "finished_at"] if col in stage_df.columns]
+        st.dataframe(stage_df[display_cols])
+        if any(stage.get("status") == "failed" for stage in stages):
+            st.error("检测到失败阶段，请检查日志并重新执行自动化流程。")
+        elif any(stage.get("status") == "blocked" for stage in stages):
+            st.warning("流程被阻断，未执行真实交易。")
+    else:
+        st.info("尚未记录任何阶段信息。")
+
+
 def _render_equity_multi(pairs: List[Tuple[str, str]]) -> None:
     records: List[pd.DataFrame] = []
     for strategy_id, session_id in pairs:
@@ -160,38 +203,77 @@ def main() -> None:
     st.set_page_config(page_title="LLM Trader Dashboard", layout="wide")
     st.title("LLM Trader 交易仪表盘")
 
-    available_pairs = data.list_strategy_sessions()
-    if not available_pairs:
-        st.info("暂无交易数据，请先运行自动交易循环。")
-        return
+    _render_pipeline_status()
+    prompt_tab, trading_tab = st.tabs(["提示词管理", "交易数据"])
 
-    options = [f"{item['strategy_id']}/{item['session_id']}" for item in available_pairs]
-    mapping = {label: (item["strategy_id"], item["session_id"]) for label, item in zip(options, available_pairs)}
+    with prompt_tab:
+        st.subheader("策略提示词模板")
+        templates = data.list_prompt_templates()
+        if not templates:
+            st.info("未发现任何提示词模板。")
+        else:
+            selected_template = st.selectbox("选择模板", templates, index=0)
+            template_info = data.load_prompt_template(selected_template)
+            source = template_info.get("source", "default")
+            updated_at = template_info.get("updated_at", "")
+            st.caption(f"来源：{source} | 最近更新时间：{updated_at or '未知'}")
+            content = st.text_area(
+                "模板内容（使用 {objective}、{symbols}、{indicators}、{historical_summary} 占位符）",
+                value=template_info.get("content", ""),
+                height=260,
+                key=f"template-editor-{selected_template}",
+            )
+            col_save, col_reset = st.columns([2, 1])
+            with col_save:
+                if st.button("保存修改", key=f"save-{selected_template}"):
+                    try:
+                        result = data.save_prompt_template(selected_template, content)
+                        st.success(f"模板已保存（更新时间：{result.get('updated_at')})")
+                    except Exception as exc:
+                        st.error(f"保存失败：{exc}")
+            with col_reset:
+                if st.button("重置为默认", key=f"reset-{selected_template}"):
+                    try:
+                        result = data.reset_prompt_template(selected_template)
+                        st.success("已重置为默认模板")
+                        st.experimental_rerun()
+                    except Exception as exc:
+                        st.error(f"重置失败：{exc}")
+            st.info("保存后新模板将在下一次交易循环中生效。")
 
-    with st.sidebar:
-        st.caption("默认读取本地 data_store，请先运行交易循环生成数据。")
-        selected_labels = st.multiselect("选择策略/会话", options, default=options[:1])
+    with trading_tab:
+        available_pairs = data.list_strategy_sessions()
+        if not available_pairs:
+            st.info("暂无交易数据，请先运行自动交易循环。")
+            return
 
-    if not selected_labels:
-        st.warning("请选择至少一个策略/会话组合")
-        return
+        options = [f"{item['strategy_id']}/{item['session_id']}" for item in available_pairs]
+        mapping = {label: (item["strategy_id"], item["session_id"]) for label, item in zip(options, available_pairs)}
 
-    selected_pairs = [mapping[label] for label in selected_labels]
-    strategy_ids = sorted({strategy for strategy, _ in selected_pairs})
-    _render_version_panel(strategy_ids)
+        with st.sidebar:
+            st.caption("默认读取本地 data_store，请先运行交易循环生成数据。")
+            selected_labels = st.multiselect("选择策略/会话", options, default=options[:1])
 
-    _render_equity_multi(selected_pairs)
+        if not selected_labels:
+            st.warning("请选择至少一个策略/会话组合")
+            return
 
-    tabs = st.tabs([f"{strategy}/{session}" for strategy, session in selected_pairs])
-    for tab, (strategy, session) in zip(tabs, selected_pairs):
-        with tab:
-            st.markdown("### 策略详情")
-            logs = _render_llm_logs(strategy, session)
-            _render_llm_assistant(strategy, session, logs)
-            st.markdown("### 订单流水")
-            _render_orders(strategy, session)
-            st.markdown("### 成交流水")
-            _render_trades(strategy, session)
+        selected_pairs = [mapping[label] for label in selected_labels]
+        strategy_ids = sorted({strategy for strategy, _ in selected_pairs})
+        _render_version_panel(strategy_ids)
+
+        _render_equity_multi(selected_pairs)
+
+        tabs = st.tabs([f"{strategy}/{session}" for strategy, session in selected_pairs])
+        for tab, (strategy, session) in zip(tabs, selected_pairs):
+            with tab:
+                st.markdown("### 策略详情")
+                logs = _render_llm_logs(strategy, session)
+                _render_llm_assistant(strategy, session, logs)
+                st.markdown("### 订单流水")
+                _render_orders(strategy, session)
+                st.markdown("### 成交流水")
+                _render_trades(strategy, session)
 
 
 if __name__ == "__main__":

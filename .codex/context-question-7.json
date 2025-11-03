@@ -1,0 +1,28 @@
+{
+  "question": "run_full_pipeline 失败时 docker 容器是否还能继续提供 dashboard？",
+  "priority": "high",
+  "reason": "用户要求“启动 docker 自动执行全流程并合并 dashboard”，若脚本异常导致容器退出，将无法满足一键启动与可观测性需求。",
+  "investigation_timestamp": "2025-11-03T15:27:45+08:00",
+  "findings": [
+    {
+      "evidence": "docker/entrypoint.sh 以 set -euo pipefail 开头，执行 python3 scripts/run_full_pipeline.py；一旦脚本返回非零状态，bash 会立即退出，不会继续启动 Streamlit。",
+      "paths": [
+        "docker/entrypoint.sh"
+      ]
+    },
+    {
+      "evidence": "scripts/run_full_pipeline.py 未捕获 run_full_automation 的异常，若数据缺失或回测拒绝导致抛错，将直接向上冒泡终止进程。",
+      "paths": [
+        "scripts/run_full_pipeline.py",
+        "src/llm_trader/pipeline/auto.py"
+      ]
+    },
+    {
+      "evidence": "tests/pipeline/test_auto.py 仅验证成功执行与回测拒绝的返回状态，没有覆盖容器入口或失败恢复逻辑，说明目前未设计相应处理。",
+      "paths": [
+        "tests/pipeline/test_auto.py"
+      ]
+    }
+  ],
+  "conclusion": "当前 entrypoint 一旦全流程脚本失败就会提前退出，dashboard 不会启动；需在重构中拆分任务或增加错误处理以保证 Docker 服务存活并支持重试。"
+}

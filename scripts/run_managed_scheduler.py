@@ -24,6 +24,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--llm-base-url", default=None, help="OpenAI 兼容接口 Base URL，默认读取 TRADING_LLM_BASE_URL")
     parser.add_argument("--max-drawdown", type=float, default=None)
     parser.add_argument("--max-position-ratio", type=float, default=None)
+    parser.add_argument(
+        "--execution-mode",
+        choices=["sandbox", "live"],
+        default=None,
+        help="交易执行模式（默认读取 TRADING_EXECUTION_MODE）",
+    )
     return parser.parse_args()
 
 
@@ -50,6 +56,7 @@ def main() -> None:
     lookback_days = args.lookback_days if args.lookback_days is not None else settings.lookback_days
     model = args.model or settings.llm_model
     llm_base_url = args.llm_base_url or settings.llm_base_url or None
+    execution_mode = args.execution_mode or settings.execution_mode
 
     for session_id, strategy_id in zip(session_ids, strategy_ids):
         configs.append(
@@ -67,6 +74,7 @@ def main() -> None:
                 initial_cash=settings.initial_cash,
                 only_latest_bar=settings.only_latest_bar,
                 symbol_universe_limit=settings.symbol_universe_limit,
+                execution_mode=execution_mode,
             )
         )
 

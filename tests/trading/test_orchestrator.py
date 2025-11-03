@@ -22,6 +22,7 @@ from llm_trader.trading import (
     TradingSessionConfig,
     run_ai_trading_cycle,
 )
+from llm_trader.trading.execution_adapters import create_execution_adapter
 
 
 class FakeGenerator:
@@ -170,3 +171,72 @@ def test_run_ai_trading_cycle_executes_orders(tmp_path: Path, monkeypatch: pytes
     entry = json.loads(lines[-1])
     assert entry["objective"] == "获取日内收益"
     assert "prompt" in entry
+
+
+def test_run_ai_trading_cycle_live_mode_raises(tmp_path: Path) -> None:
+    base_dir = tmp_path / "data_store"
+    manager = default_manager(base_dir=base_dir)
+    repo = ParquetRepository(manager=manager)
+
+    history = [
+        {
+            "symbol": "600000.SH",
+            "dt": datetime(2024, 1, 1, 9, 30),
+            "freq": "D",
+            "open": 9.5,
+            "high": 10.2,
+            "low": 9.4,
+            "close": 10.1,
+            "volume": 100000,
+            "amount": 1000000,
+        }
+    ]
+
+    def fake_load(symbols, freq, start, end):
+        assert symbols == ["600000.SH"]
+        return history
+
+    generator = FakeGenerator(
+        [
+            RuleConfig(
+                indicator="sma",
+                column="close",
+                params={"window": 1},
+                operator=">",
+                threshold=9.0,
+            )
+        ]
+    )
+    realtime = FakeRealtimePipeline(
+        [
+            {
+                "symbol": "600000.SH",
+                "last_price": 10.5,
+                "change_ratio": 1.2,
+                "turnover_rate": 3.5,
+            }
+        ]
+    )
+
+    session = TradingSession(
+        TradingSessionConfig(session_id="session-live", strategy_id="strategy-live", initial_cash=100000.0),
+        repository=repo,
+        adapter=create_execution_adapter("live"),
+    )
+
+    with pytest.raises(NotImplementedError):
+        run_ai_trading_cycle(
+            TradingCycleConfig(
+                session_id="session-live",
+                strategy_id="strategy-live",
+                symbols=["600000.SH"],
+                objective="获取收益",
+                indicators=("sma",),
+                history_start=datetime(2024, 1, 1),
+                execution_mode="live",
+            ),
+            generator=generator,
+            trading_session=session,
+            realtime_pipeline=realtime,
+            load_ohlcv_fn=fake_load,
+        )

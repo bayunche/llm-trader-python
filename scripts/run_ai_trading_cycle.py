@@ -39,6 +39,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=None, help="大模型名称")
     parser.add_argument("--llm-base-url", default=None, help="OpenAI 兼容接口的 Base URL")
     parser.add_argument("--no-only-latest", action="store_true", help="执行所有历史 bar 的信号")
+    parser.add_argument(
+        "--execution-mode",
+        default=None,
+        choices=["sandbox", "live"],
+        help="交易执行模式（默认读取 TRADING_EXECUTION_MODE）",
+    )
     return parser.parse_args()
 
 
@@ -58,6 +64,7 @@ def main() -> None:
     only_latest = settings.only_latest_bar
     if args.no_only_latest:
         only_latest = False
+    execution_mode = args.execution_mode or settings.execution_mode
 
     if not symbols:
         raise SystemExit("未指定交易标的，请通过 --symbols 或 TRADING_SYMBOLS 配置")
@@ -79,6 +86,7 @@ def main() -> None:
         llm_base_url=llm_base_url,
         only_latest_bar=only_latest,
         symbol_universe_limit=settings.symbol_universe_limit,
+        execution_mode=execution_mode,
     )
 
     result = run_ai_trading_cycle(config)

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from llm_trader.trading import TradingSessionConfig
 from llm_trader.trading.manager import run_managed_trading_cycle
-from llm_trader.trading.policy import RiskPolicy, RiskThresholds
+from llm_trader.trading.policy import RiskDecision, RiskPolicy, RiskThresholds
 from llm_trader.trading.session import TradingSession
 from tests.trading.test_orchestrator import FakeRealtimePipeline
 from llm_trader.trading.orchestrator import TradingCycleConfig
@@ -99,3 +99,34 @@ def test_run_managed_trading_cycle_triggers_policy(monkeypatch) -> None:
     )
     assert not outcome.decision.proceed
     assert outcome.decision.alerts
+
+
+def test_run_managed_trading_cycle_emits_alert(monkeypatch) -> None:
+    monkeypatch.setenv("TRADING_EXECUTION_MODE", "sandbox")
+    _captured = {}
+
+    def fake_emit(self, message, *, details=None):
+        _captured["message"] = message
+        _captured["details"] = details or {}
+
+    monkeypatch.setattr("llm_trader.trading.manager.AlertEmitter.emit", fake_emit, raising=False)
+
+    policy = RiskPolicy(RiskThresholds(max_equity_drawdown=0.0, max_position_ratio=0.0))
+    session = TradingSession(TradingSessionConfig(session_id="s", strategy_id="st"))
+
+    def fake_run(*_args, **_kwargs):
+        return {
+            "session": session,
+        }
+
+    monkeypatch.setattr("llm_trader.trading.manager.run_ai_trading_cycle", fake_run)
+
+    decision = RiskDecision(proceed=False, alerts=["test alert"])
+    monkeypatch.setattr(
+        "llm_trader.trading.manager.RiskPolicy.evaluate",
+        lambda self, *_args, **_kwargs: decision,
+    )
+
+    result = run_managed_trading_cycle(TradingCycleConfig(session_id="s", strategy_id="st", symbols=[], objective=""), policy=policy)
+    assert not result.decision.proceed
+    assert _captured["details"]["reason"] == "test alert"
