@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 
 from llm_trader.common import DataSourceError, get_logger
 from llm_trader.data.repositories.parquet import ParquetRepository
-
+from llm_trader.data.pipelines.symbols import SymbolsPipeline
 from .client import EastMoneyClient
 
 
@@ -23,9 +23,11 @@ class RealtimeQuotesPipeline:
         *,
         client: Optional[EastMoneyClient] = None,
         repository: Optional[ParquetRepository] = None,
+        symbols_limit: Optional[int] = None,
     ) -> None:
         self.client = client or EastMoneyClient()
         self.repository = repository or ParquetRepository()
+        self.symbols_limit = symbols_limit
 
     def fetch(self, symbols: Iterable[str]) -> List[Dict[str, object]]:
         symbol_list = list(symbols)
@@ -57,8 +59,16 @@ class RealtimeQuotesPipeline:
             raise DataSourceError("未获取到实时行情")
         return records
 
-    def sync(self, symbols: Iterable[str]) -> List[Dict[str, object]]:
-        symbol_list = list(symbols)
+    def sync(self, symbols: Optional[Sequence[str]] = None) -> List[Dict[str, object]]:
+        symbol_list = list(symbols or [])
+        if not symbol_list:
+            symbol_list = self.repository.list_active_symbols(limit=self.symbols_limit)
+        if not symbol_list:
+            SymbolsPipeline(repository=self.repository).sync()
+            symbol_list = self.repository.list_active_symbols(limit=self.symbols_limit)
+        if not symbol_list:
+            raise DataSourceError("缺少可用标的，请先同步证券主表或提供候选列表")
+
         records = self.fetch(symbol_list)
         snapshot_time = datetime.utcnow()
         for record in records:
@@ -82,9 +92,14 @@ class RealtimeQuotesPipeline:
         symbol_code = item.get("f12")
         exchange = item.get("f13")
         name = item.get("f14")
-        if not symbol_code or not exchange:
+        if not symbol_code:
             return None
-        symbol = f"{symbol_code}.{exchange.upper()}"
+        if exchange is None or str(exchange) == "":
+            return None
+        normalized_exchange = RealtimeQuotesPipeline._normalize_exchange(exchange)
+        if not normalized_exchange:
+            return None
+        symbol = f"{symbol_code}.{normalized_exchange}"
         price = item.get("f2")
         change = item.get("f3")
         change_ratio = item.get("f4")
@@ -114,6 +129,21 @@ class RealtimeQuotesPipeline:
             "pe": pe,
             "snapshot_time": datetime.utcnow(),
         }
+
+    @staticmethod
+    def _normalize_exchange(value: object) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        mapping = {
+            "1": "SH",
+            "0": "SZ",
+            "2": "BJ",
+            "3": "HK",
+        }
+        return mapping.get(text, text.upper())
 
 
 __all__ = ["RealtimeQuotesPipeline"]

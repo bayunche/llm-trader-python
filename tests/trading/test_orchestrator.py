@@ -26,7 +26,11 @@ from llm_trader.trading import (
 
 class FakeGenerator:
     def __init__(self, rules: Sequence[RuleConfig]) -> None:
-        self._suggestion = LLMStrategySuggestion(description="demo", rules=list(rules))
+        self._suggestion = LLMStrategySuggestion(
+            description="demo",
+            rules=list(rules),
+            selected_symbols=["600000.SH"],
+        )
         self.last_prompt = None
         self.last_raw_response = None
 
@@ -128,6 +132,7 @@ def test_run_ai_trading_cycle_executes_orders(tmp_path: Path, monkeypatch: pytes
 
     assert result["orders_executed"] >= 1
     assert result["trades_filled"] >= 1
+    assert result["selected_symbols"] == ["600000.SH"]
 
     orders_path = manager.path_for(
         DatasetKind.TRADING_ORDERS,

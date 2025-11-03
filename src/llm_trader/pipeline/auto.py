@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -11,6 +11,7 @@ import pandas as pd
 from llm_trader.api.utils import load_ohlcv
 from llm_trader.backtest import BacktestRunner, Order
 from llm_trader.backtest.models import OrderSide
+from llm_trader.config import get_settings
 from llm_trader.trading import TradingCycleConfig, run_managed_trading_cycle
 from llm_trader.trading.manager import ManagedTradingResult
 from llm_trader.strategy import generate_orders_from_signals
@@ -22,8 +23,12 @@ from llm_trader.trading.orchestrator import run_ai_trading_cycle
 class BacktestCriteria:
     """回测验收标准。"""
 
-    min_total_return: float = 0.0
-    max_drawdown: float = 0.2
+    min_total_return: float = field(
+        default_factory=lambda: get_settings().trading.backtest_min_return
+    )
+    max_drawdown: float = field(
+        default_factory=lambda: get_settings().trading.backtest_max_drawdown
+    )
 
 
 @dataclass
@@ -33,8 +38,8 @@ class AutoTradingConfig:
     trading: TradingCycleConfig
     backtest_start: datetime
     backtest_end: datetime
-    criteria: BacktestCriteria = BacktestCriteria()
-    run_backtest: bool = True
+    criteria: BacktestCriteria = field(default_factory=BacktestCriteria)
+    run_backtest: bool = field(default_factory=lambda: get_settings().trading.run_backtest)
 
 
 @dataclass
@@ -54,13 +59,14 @@ def run_full_automation(
 
     trading_result = run_ai_trading_cycle(config.trading, trading_session=trading_session)
     suggestion = trading_result["suggestion"]
+    derived_config: TradingCycleConfig = trading_result.get("config", config.trading)
 
     backtest_metrics: Optional[Dict[str, float]] = None
 
     if config.run_backtest:
         bars = load_ohlcv_fn(
-            config.trading.symbols,
-            config.trading.freq,
+            derived_config.symbols,
+            derived_config.freq,
             config.backtest_start,
             config.backtest_end,
         )
@@ -76,7 +82,7 @@ def run_full_automation(
         result = runner.run(
             bars,
             provider,
-            strategy_id=config.trading.strategy_id,
+            strategy_id=derived_config.strategy_id,
             run_id="auto",
             persist=False,
         )
@@ -85,7 +91,7 @@ def run_full_automation(
             return AutoTradingResult("backtest_rejected", backtest_metrics, None)
 
     managed = run_managed_trading_cycle(
-        config.trading,
+        derived_config,
         trading_session=trading_result["session"],
     )
     status = "executed" if managed.decision.proceed else "risk_blocked"
@@ -150,6 +156,8 @@ def _main() -> None:  # pragma: no cover - 简易 CLI
         symbols=args.symbols,
         objective=args.objective,
         history_start=datetime.fromisoformat(args.backtest_start),
+        llm_base_url=get_settings().trading.llm_base_url or None,
+        symbol_universe_limit=get_settings().trading.symbol_universe_limit,
     )
     auto_cfg = AutoTradingConfig(
         trading=trading_cfg,

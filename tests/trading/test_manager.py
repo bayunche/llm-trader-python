@@ -29,6 +29,7 @@ class ManagerFakeGenerator:
                     threshold=8.5,
                 )
             ],
+            selected_symbols=["600000.SH"],
         )
 
     def generate(self, context):

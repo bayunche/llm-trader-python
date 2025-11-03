@@ -27,6 +27,9 @@ from llm_trader.strategy.llm_generator import (
 )
 from llm_trader.trading.session import TradingSession, TradingSessionConfig
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
+from llm_trader.data.pipelines.symbols import SymbolsPipeline
+from llm_trader.data.repositories.parquet import ParquetRepository
+from llm_trader.common import DataSourceError
 
 
 @dataclass
@@ -35,7 +38,7 @@ class TradingCycleConfig:
 
     session_id: str
     strategy_id: str
-    symbols: Sequence[str]
+    symbols: Sequence[str]  # 候选标的列表，模型可从中挑选最终交易标的
     objective: str
     indicators: Sequence[str] = field(default_factory=lambda: ("sma", "ema", "rsi"))
     freq: str = "D"
@@ -44,7 +47,9 @@ class TradingCycleConfig:
     initial_cash: float = 1_000_000.0
     llm_model: str = "gpt-4.1-mini"
     llm_api_key: Optional[str] = None
+    llm_base_url: Optional[str] = None
     only_latest_bar: bool = True  # 只对最近一个 bar 生成订单，避免重复建仓
+    symbol_universe_limit: Optional[int] = None
 
 
 def run_ai_trading_cycle(
@@ -58,24 +63,30 @@ def run_ai_trading_cycle(
 ) -> Dict[str, object]:
     """执行一次完整的 AI 交易循环并返回执行详情。"""
 
-    if not config.symbols:
-        raise ValueError("symbols 不能为空")
+    pipeline = realtime_pipeline or RealtimeQuotesPipeline(symbols_limit=config.symbol_universe_limit)
+    candidate_symbols = _resolve_candidate_symbols(config)
 
-    pipeline = realtime_pipeline or RealtimeQuotesPipeline()
-    quotes = pipeline.sync(config.symbols)
+    quotes = pipeline.sync(candidate_symbols)
     if not quotes:
         raise ValueError("未获取到实时行情数据")
 
     summary = _summarize_quotes(quotes)
 
-    llm = generator or LLMStrategyGenerator(model=config.llm_model, api_key=config.llm_api_key)
+    llm = generator or LLMStrategyGenerator(
+        model=config.llm_model,
+        api_key=config.llm_api_key,
+        base_url=config.llm_base_url,
+    )
     context = LLMStrategyContext(
         objective=config.objective,
-        symbols=config.symbols,
+        symbols=candidate_symbols,
         indicators=config.indicators,
         historical_summary=summary,
     )
     suggestion = llm.generate(context)
+    chosen_symbols = suggestion.selected_symbols or candidate_symbols
+    pipeline_symbols = list(dict.fromkeys(chosen_symbols))
+
     if log_repository is None:
         log_repository = LLMStrategyLogRepository()
     last_prompt = getattr(llm, "last_prompt", None)
@@ -102,8 +113,12 @@ def run_ai_trading_cycle(
                 "symbols": list(config.symbols),
                 "indicators": list(config.indicators),
                 "quotes_summary": summary,
+                "selected_symbols": pipeline_symbols,
             },
         )
+
+    if pipeline_symbols != candidate_symbols:
+        quotes = pipeline.sync(pipeline_symbols)
 
     session = trading_session or TradingSession(
         TradingSessionConfig(
@@ -113,11 +128,27 @@ def run_ai_trading_cycle(
         )
     )
 
-    bars = load_ohlcv_fn(config.symbols, config.freq, config.history_start, config.history_end)
+    bars = load_ohlcv_fn(pipeline_symbols, config.freq, config.history_start, config.history_end)
     if not bars:
         raise ValueError("缺少历史行情数据，无法评估策略")
 
-    orders_by_dt = _generate_orders(bars, suggestion, config)
+    derived_config = TradingCycleConfig(
+        session_id=config.session_id,
+        strategy_id=config.strategy_id,
+        symbols=pipeline_symbols,
+        objective=config.objective,
+        indicators=config.indicators,
+        freq=config.freq,
+        history_start=config.history_start,
+        history_end=config.history_end,
+        initial_cash=config.initial_cash,
+        llm_model=config.llm_model,
+        llm_api_key=config.llm_api_key,
+        llm_base_url=config.llm_base_url,
+        only_latest_bar=config.only_latest_bar,
+    )
+
+    orders_by_dt = _generate_orders(bars, suggestion, derived_config)
     price_lookup = _build_price_lookup(quotes, bars)
 
     executed_trades: List[Order] = []
@@ -134,6 +165,8 @@ def run_ai_trading_cycle(
         "orders_executed": sum(len(v) for v in orders_by_dt.values()),
         "trades_filled": len(executed_trades),
         "session": session,
+        "selected_symbols": pipeline_symbols,
+        "config": derived_config,
     }
 
 
@@ -209,3 +242,19 @@ def _build_price_lookup(
 
 
 __all__ = ["TradingCycleConfig", "run_ai_trading_cycle"]
+def _resolve_candidate_symbols(config: TradingCycleConfig) -> List[str]:
+    candidate_symbols = [symbol for symbol in config.symbols if str(symbol).strip()]
+    limit = config.symbol_universe_limit
+    if limit is not None and candidate_symbols:
+        candidate_symbols = candidate_symbols[:limit]
+    if candidate_symbols:
+        return list(dict.fromkeys(candidate_symbols))
+
+    repository = ParquetRepository()
+    symbols = repository.list_active_symbols(limit=limit)
+    if not symbols:
+        SymbolsPipeline(repository=repository).sync()
+        symbols = repository.list_active_symbols(limit=limit)
+    if not symbols:
+        raise DataSourceError("未找到可用标的，请先同步证券主表")
+    return symbols

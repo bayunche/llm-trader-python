@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 import pytest
 
+from llm_trader.common import DataSourceError
 from llm_trader.data import DatasetKind, default_manager
+from llm_trader.config import get_settings
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
 from llm_trader.data.repositories.parquet import ParquetRepository
 
@@ -28,7 +30,7 @@ def _sample_payload() -> Dict[str, object]:
             "diff": [
                 {
                     "f12": "600000",
-                    "f13": "SH",
+                    "f13": 1,
                     "f14": "浦发银行",
                     "f2": 10.5,
                     "f3": 0.12,
@@ -52,11 +54,13 @@ def _sample_payload() -> Dict[str, object]:
 
 def test_realtime_quotes_pipeline_sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    get_settings.cache_clear()
     repository = ParquetRepository()
     pipeline = RealtimeQuotesPipeline(client=FakeClient(_sample_payload()), repository=repository)
 
     records = pipeline.sync(["600000.SH"])
     assert len(records) == 1
+    assert records[0]["symbol"] == "600000.SH"
     manager = default_manager()
     path = manager.path_for(
         DatasetKind.REALTIME_QUOTES,
@@ -65,4 +69,76 @@ def test_realtime_quotes_pipeline_sync(tmp_path: Path, monkeypatch: pytest.Monke
     )
     assert path.exists()
     df = pd.read_parquet(path)
-    assert df.iloc[0]["last_price"] == 10.5
+    assert df.iloc[0]["last_price"] == records[0]["last_price"]
+
+
+def test_realtime_quotes_pipeline_sync_uses_symbol_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    get_settings.cache_clear()
+    repository = ParquetRepository()
+    repository.write_symbols(
+        [
+            {
+                "symbol": "600000.SH",
+                "name": "浦发银行",
+                "board": "主板",
+                "listed_date": datetime(1999, 11, 10),
+                "delisted_date": None,
+                "status": "active",
+                "exchange": "SH",
+                "industry": "银行",
+            },
+            {
+                "symbol": "000001.SZ",
+                "name": "平安银行",
+                "board": "主板",
+                "listed_date": datetime(1991, 4, 3),
+                "delisted_date": None,
+                "status": "active",
+                "exchange": "SZ",
+                "industry": "银行",
+            },
+        ]
+    )
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.requests: List[str] = []
+
+        def get_json(self, url: str, params: Dict[str, object]) -> Dict[str, object]:
+            self.requests.append(str(params.get("secids", "")))
+            return {
+                "data": {
+                    "diff": [
+                        {
+                            "f12": "600000",
+                            "f13": 1,
+                            "f14": "浦发银行",
+                            "f2": 10.5,
+                        },
+                        {
+                            "f12": "000001",
+                            "f13": 0,
+                            "f14": "平安银行",
+                            "f2": 12.3,
+                        },
+                    ]
+                }
+            }
+
+    client = RecordingClient()
+    pipeline = RealtimeQuotesPipeline(client=client, repository=repository)
+    records = pipeline.sync()
+    symbols = {record["symbol"] for record in records}
+    assert symbols == {"600000.SH", "000001.SZ"}
+    assert client.requests  # 确认已发起请求
+
+
+def test_realtime_quotes_pipeline_requires_symbols(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    get_settings.cache_clear()
+    pipeline = RealtimeQuotesPipeline(client=FakeClient({"data": {"diff": []}}))
+    with pytest.raises(DataSourceError):
+        pipeline.sync()

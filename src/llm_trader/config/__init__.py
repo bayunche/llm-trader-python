@@ -5,7 +5,9 @@ from .settings import (
     AppSettings,
     DataStoreSettings,
     LoggingSettings,
+    RiskSettings,
     SchedulerSettings,
+    TradingSettings,
     get_settings,
 )
 
@@ -14,6 +16,8 @@ __all__ = [
     "AppSettings",
     "DataStoreSettings",
     "LoggingSettings",
+    "RiskSettings",
     "SchedulerSettings",
+    "TradingSettings",
     "get_settings",
 ]

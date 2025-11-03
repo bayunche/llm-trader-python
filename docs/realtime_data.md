@@ -25,8 +25,11 @@ data_store/
 ## 3. 调度使用
 
 ```bash
-# 以 1 分钟间隔抓取浦发银行和深发展
+# 指定候选标的，按 1 分钟间隔抓取
 python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ --interval 1
+
+# 若省略 --symbols，将自动读取证券主表（symbols.parquet）中的全部有效标的
+python scripts/run_realtime_scheduler.py --interval 1
 ```
 
 脚本基于 APScheduler 的 `BackgroundScheduler`，支持 Ctrl+C 优雅退出。
@@ -34,6 +37,7 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ --interva
 ## 4. 注意事项
 
 - 单次请求最多 50 个证券，管道内部已自动切分；如需更大规模抓取，可多进程/多任务配置。
+- 未显式指定标的时，实时行情管道会根据证券主表自动构建标的池，需确保已执行 `SymbolsPipeline.sync()`。
 - 接口存在速率限制，建议结合阶段 8 的监控与限流配置使用。
 - 落盘文件按日期追加，可配合 BI/Streamlit 仪表盘进行实时展示。
 - 若需与大模型策略生成联动，可结合 `StrategyRepository` 自动登记最新信号。

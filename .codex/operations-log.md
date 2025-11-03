@@ -330,3 +330,43 @@
 2025-10-30T15:07:05+08:00 | note | README | 项目概览仍提“规划中”，考虑更新为已完成状态
 2025-10-30T15:07:34+08:00 | note | README | 更新项目概览描述
 2025-10-30T15:20:13+08:00 | note | gitignore | 添加基础忽略规则
+2025-10-30T23:51:20+08:00 | shell | sequential-thinking | 失败：命令不存在，需改用手动分析
+2025-10-30T23:52:30+08:00 | apply_patch | +.codex/context-question-6.json,*.codex/context-questions.json | 补充交易配置可调性分析与疑问登记
+2025-10-30T23:57:45+08:00 | apply_patch | *src/llm_trader/config/settings.py,*src/llm_trader/config/__init__.py,*src/llm_trader/pipeline/auto.py,*src/llm_trader/tasks/managed_cycle.py,*scripts/run_ai_trading_cycle.py,*scripts/run_managed_trading_cycle.py,*scripts/run_managed_scheduler.py | 统一交易循环/调度参数读取环境变量
+2025-10-30T23:58:05+08:00 | apply_patch | *.env.example,*README.md | 补充 TRADING_* 环境变量示例与文档
+2025-10-30T23:58:15+08:00 | apply_patch | *.codex/testing.md,*verification.md | 更新测试记录与验证凭证
+2025-10-30T23:58:20+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：54 项通过（交易配置改造回归）
+2025-10-30T23:59:10+08:00 | apply_patch | *.env | 配置沙箱交易默认参数（TRADING_*）
+2025-10-31T10:29:48+08:00 | apply_patch | pyproject.toml,requirements.dev.txt | 补充 APScheduler 依赖，修复容器缺少调度库
+2025-10-31T10:34:54+08:00 | apply_patch | scripts/run-prod-smoke.sh | 覆盖 ENTRYPOINT 以便容器内执行 pytest
+2025-10-31T10:35:30+08:00 | shell | scripts/run-prod-smoke.sh | 成功：Docker 镜像构建并在容器内通过 54 项 pytest
+2025-10-31T10:59:05+08:00 | apply_patch | Dockerfile | 导出 PYTHONPATH=/app/src 解决容器内模块导入问题
+2025-10-31T11:02:37+08:00 | shell | docker compose -f docker-compose.prod.yml up --build -d | 成功：生产调度容器启动
+2025-10-31T11:03:34+08:00 | apply_patch | docker-compose.prod.yml | 调整 command 仅传递配置路径，避免 ENTRYPOINT 重复
+2025-10-31T11:03:34+08:00 | shell | docker compose -f docker-compose.prod.yml up -d | 成功：scheduler 容器重建并保持运行
+2025-10-31T11:14:51+08:00 | apply_patch | src/llm_trader/data/pipelines/realtime_quotes.py,tests/data/test_realtime_quotes.py,src/llm_trader/tasks/managed_cycle.py,tests/tasks/test_managed_cycle.py | 修复行情交易所解析并允许调度传入字典配置
+2025-10-31T11:15:08+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：55 项测试通过（调度接入字典配置回归）
+2025-10-31T11:16:04+08:00 | shell | docker compose -f docker-compose.prod.yml restart scheduler | 成功：重启调度容器加载最新代码
+2025-10-31T23:38:50+08:00 | apply_patch | dashboard/__init__.py,dashboard/app.py | 补充仪表盘包初始化并改用相对导入，解决 streamlit 启动错误
+2025-11-01T11:31:45+08:00 | apply_patch | dashboard/app.py | 增加运行时路径修正与自动导入，确保 streamlit run dashboard/app.py 正常工作
+2025-11-01T12:33:49+08:00 | apply_patch | dashboard/app.py | 将 src 目录加入 sys.path，修复仪表盘对 llm_trader 的导入
+2025-11-01T12:49:00+08:00 | apply_patch | src/llm_trader/tasks/managed_cycle.py,tests/tasks/test_managed_cycle.py | 使用 get_logger 输出并规范调度配置处理，补充调度日志
+2025-11-01T12:50:10+08:00 | apply_patch | tests/data/test_realtime_quotes.py | 重置配置缓存并放宽断言，防止历史数据干扰
+2025-11-01T12:51:58+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：55 项测试通过（调度日志修复回归）
+2025-11-01T12:54:33+08:00 | shell | docker compose -f docker-compose.prod.yml restart scheduler | 成功：调度容器刷新日志配置
+2025-11-01T12:56:00+08:00 | apply_patch | pyproject.toml,requirements.dev.txt | 补充 openai 依赖，避免受控交易缺少模型 SDK
+2025-11-01T13:27:29+08:00 | apply_patch | Dockerfile,Dockerfile.dev | 设置 PIP_DEFAULT_TIMEOUT 提升镜像构建稳定性
+2025-11-01T16:11:19+08:00 | apply_patch | src/llm_trader/tasks/managed_cycle.py,tests/tasks/test_managed_cycle.py | 支持向运行周期传递额外参数并新增传参测试
+2025-11-01T16:11:19+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：56 项测试通过（受控交易日志增强回归）
+2025-11-01T17:40:00+08:00 | shell | scripts/run-prod-smoke.sh | 失败：pip 安装 openai 超时，后续将延长超时时间重试
+2025-11-01T17:45:32+08:00 | apply_patch | src/llm_trader/config/settings.py,scripts/run_ai_trading_cycle.py,scripts/run_managed_trading_cycle.py,scripts/run_managed_scheduler.py,src/llm_trader/trading/orchestrator.py,src/llm_trader/strategy/llm_generator.py,src/llm_trader/pipeline/auto.py,docker-compose.prod.yml,.env,.env.example | 支持自定义 LLM Base URL 与配置透传
+2025-11-01T17:47:10+08:00 | apply_patch | tests/strategy/test_llm_generator.py | 新增 base_url 测试，验证 OpenAI 兼容端点配置
+2025-11-01T17:48:22+08:00 | apply_patch | README.md | 更新文档说明自定义 LLM 接口配置
+2025-11-01T18:29:17+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：57 项测试通过（LLM 自动选股改造回归）
+2025-11-01T18:58:32+08:00 | apply_patch | src/llm_trader/data/repositories/parquet.py,src/llm_trader/data/pipelines/realtime_quotes.py,src/llm_trader/tasks/realtime.py,scripts/run_realtime_scheduler.py,tests/data/test_realtime_quotes.py,tests/tasks/test_realtime.py,docs/realtime_data.md,.env,.env.example | 实时行情自动读取证券主表构建标的池
+2025-11-01T19:12:13+08:00 | apply_patch | src/llm_trader/trading/orchestrator.py,src/llm_trader/pipeline/auto.py,scripts/run_ai_trading_cycle.py,scripts/run_managed_trading_cycle.py,scripts/run_managed_scheduler.py,src/llm_trader/config/settings.py,docs/strategy_llm.md,README.md | LLM 选股与自动标的池联动配置
+2025-11-01T19:12:13+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：59 项测试通过（自动标的池 & 选股改造回归）
+2025-11-03T09:39:55+08:00 | add | start.sh,start.ps1 | 一键启动脚本（up/down/restart/logs/status/sync-symbols）
+2025-11-03T09:39:55+08:00 | apply_patch | README.md | 文档补充一键启动脚本说明
+2025-11-03T09:43:19+08:00 | apply_patch | docker-compose.prod.yml,start.sh,start.ps1,.env,.env.example,README.md,docs/realtime_data.md | 整合 compose 启动调度+仪表盘，脚本支持多服务操作
+2025-11-03T09:43:19+08:00 | shell | conda run -n llm-trader env PYTHONPATH=src python -m pytest | 成功：59 项测试通过（多服务 compose 回归）

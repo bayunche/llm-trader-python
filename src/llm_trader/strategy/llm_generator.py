@@ -31,6 +31,7 @@ class LLMStrategySuggestion:
 
     description: str
     rules: List[RuleConfig]
+    selected_symbols: List[str]
 
 
 class LLMStrategyGenerator:
@@ -41,9 +42,11 @@ class LLMStrategyGenerator:
         *,
         model: str = "gpt-4.1-mini",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         completion_fn: Optional[Callable[[str], str]] = None,
     ) -> None:
         self.model = model
+        self._base_url = base_url
         self._completion_fn = completion_fn
         self._client = None
         self.last_prompt: Optional[str] = None
@@ -54,7 +57,10 @@ class LLMStrategyGenerator:
             resolved_key = api_key or os.getenv("OPENAI_API_KEY")
             if not resolved_key:
                 raise RuntimeError("缺少 OPENAI_API_KEY，无法调用大模型")
-            self._client = OpenAI(api_key=resolved_key)
+            client_kwargs = {"api_key": resolved_key}
+            if base_url:
+                client_kwargs["base_url"] = base_url
+            self._client = OpenAI(**client_kwargs)  # type: ignore[arg-type]
 
     def generate(self, context: LLMStrategyContext) -> LLMStrategySuggestion:
         prompt = self._build_prompt(context)
@@ -70,6 +76,7 @@ class LLMStrategyGenerator:
 你是一名量化分析师，需要根据输入的背景和历史表现生成可执行的股票策略规则。
 请输出 JSON，包含字段：
 * description: 策略概述（中文）
+* selected_symbols: 数组，需从候选标的中挑选 1-5 个用于交易
 * rules: 数组，每项含 indicator, column, params(对象), operator, threshold
 
 约束：
@@ -77,6 +84,7 @@ class LLMStrategyGenerator:
 2. 阈值为数值，operator 仅允许 ">", ">=", "<", "<=", "cross_up", "cross_down"
 3. params 需是 JSON 对象，如 {{"window": 20}}
 4. 至少返回 1 条规则
+5. selected_symbols 不能为空，需使用候选标的：{symbols_text}
 
 目标：{context.objective}
 标的：{symbols_text}
@@ -114,6 +122,13 @@ class LLMStrategyGenerator:
         if not isinstance(rules_payload, list) or not rules_payload:
             raise ValueError("大模型未返回有效的规则列表")
 
+        selected_symbols = data.get("selected_symbols") or data.get("symbols")
+        if not isinstance(selected_symbols, list) or not selected_symbols:
+            raise ValueError("大模型未指定交易标的 selected_symbols")
+        normalized_symbols = [str(symbol).strip() for symbol in selected_symbols if str(symbol).strip()]
+        if not normalized_symbols:
+            raise ValueError("selected_symbols 为空")
+
         rules: List[RuleConfig] = []
         for idx, rule_data in enumerate(rules_payload):
             try:
@@ -129,7 +144,7 @@ class LLMStrategyGenerator:
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(f"第 {idx + 1} 条规则解析失败：{exc}") from exc
 
-        return LLMStrategySuggestion(description=description, rules=rules)
+        return LLMStrategySuggestion(description=description, rules=rules, selected_symbols=normalized_symbols)
 
 
 __all__ = ["LLMStrategyGenerator", "LLMStrategyContext", "LLMStrategySuggestion"]

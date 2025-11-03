@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 # python-dotenv 在尚未安装依赖时可能不可用，因此提供兜底实现
 try:
@@ -62,6 +62,13 @@ def _env_float(key: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
+
+
+def _env_list(key: str, default: List[str]) -> List[str]:
+    raw = os.getenv(key)
+    if raw is None or not raw.strip():
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @dataclass
@@ -127,6 +134,32 @@ class RiskSettings:
 
 
 @dataclass
+class TradingSettings:
+    """交易相关默认配置。"""
+
+    session_id: str = field(default_factory=lambda: _getenv("TRADING_SESSION", "session-demo"))
+    strategy_id: str = field(default_factory=lambda: _getenv("TRADING_STRATEGY", "strategy-demo"))
+    symbols: List[str] = field(default_factory=lambda: _env_list("TRADING_SYMBOLS", ["600000.SH"]))
+    objective: str = field(default_factory=lambda: _getenv("TRADING_OBJECTIVE", "自动交易"))
+    freq: str = field(default_factory=lambda: _getenv("TRADING_FREQ", "D"))
+    indicators: List[str] = field(default_factory=lambda: _env_list("TRADING_INDICATORS", ["sma", "ema"]))
+    initial_cash: float = field(default_factory=lambda: _env_float("TRADING_INITIAL_CASH", 1_000_000.0))
+    lookback_days: int = field(default_factory=lambda: _env_int("TRADING_LOOKBACK_DAYS", 120))
+    llm_model: str = field(default_factory=lambda: _getenv("TRADING_LLM_MODEL", "gpt-4.1-mini"))
+    only_latest_bar: bool = field(default_factory=lambda: _env_bool("TRADING_ONLY_LATEST", True))
+    scheduler_interval_minutes: int = field(default_factory=lambda: _env_int("TRADING_SCHEDULER_INTERVAL", 60))
+    run_backtest: bool = field(default_factory=lambda: _env_bool("TRADING_RUN_BACKTEST", True))
+    backtest_min_return: float = field(
+        default_factory=lambda: _env_float("TRADING_BACKTEST_MIN_RETURN", 0.0)
+    )
+    backtest_max_drawdown: float = field(
+        default_factory=lambda: _env_float("TRADING_BACKTEST_MAX_DRAWDOWN", 0.2)
+    )
+    llm_base_url: str = field(default_factory=lambda: _getenv("TRADING_LLM_BASE_URL", ""))
+    symbol_universe_limit: int = field(default_factory=lambda: _env_int("TRADING_SYMBOL_UNIVERSE_LIMIT", 200))
+
+
+@dataclass
 class AppSettings:
     """应用全局配置集合。"""
 
@@ -136,6 +169,7 @@ class AppSettings:
     scheduler: SchedulerSettings = field(default_factory=SchedulerSettings)
     logging: LoggingSettings = field(default_factory=LoggingSettings)
     risk: RiskSettings = field(default_factory=RiskSettings)
+    trading: TradingSettings = field(default_factory=TradingSettings)
 
 
 @lru_cache(maxsize=1)
@@ -152,5 +186,6 @@ __all__ = [
     "SchedulerSettings",
     "LoggingSettings",
     "RiskSettings",
+    "TradingSettings",
     "get_settings",
 ]

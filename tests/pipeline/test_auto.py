@@ -27,6 +27,7 @@ class PipelineFakeGenerator:
                     threshold=9.0,
                 )
             ],
+            selected_symbols=["600000.SH"],
         )
 
     def generate(self, context):
@@ -85,6 +86,8 @@ def test_full_automation_executes(monkeypatch) -> None:
             "orders_executed": 0,
             "trades_filled": 0,
             "session": session,
+            "selected_symbols": ["600000.SH"],
+            "config": config.trading,
         }
 
     monkeypatch.setattr("llm_trader.pipeline.auto.run_ai_trading_cycle", fake_cycle)
@@ -130,6 +133,8 @@ def test_full_automation_rejects_on_backtest(monkeypatch) -> None:
             "orders_executed": 0,
             "trades_filled": 0,
             "session": session,
+            "selected_symbols": ["600000.SH"],
+            "config": config.trading,
         }
 
     monkeypatch.setattr("llm_trader.pipeline.auto.run_ai_trading_cycle", fake_cycle)

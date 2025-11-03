@@ -1,0 +1,38 @@
+{
+  "question": "哪些交易循环和调度脚本仍然使用硬编码默认值，如何改造成从环境变量读取？",
+  "investigation": {
+    "sources": [
+      {
+        "file": "scripts/run_ai_trading_cycle.py",
+        "notes": "指标、频率等参数仍然使用内联默认值，而非配置模块。"
+      },
+      {
+        "file": "scripts/run_managed_scheduler.py",
+        "notes": "调度间隔、回看天数和模型名称直接定义在命令行默认值，缺乏配置读取。"
+      },
+      {
+        "file": "src/llm_trader/pipeline/auto.py",
+        "notes": "回测验收标准和是否执行回测完全依赖 dataclass 默认值。"
+      },
+      {
+        "file": "src/llm_trader/trading/orchestrator.py",
+        "notes": "TradingCycleConfig 默认 initial_cash=1_000_000.0，仅在外层显式传参时才会覆盖。"
+      }
+    ],
+    "analysis": [
+      "配置模块 `TradingSettings` 已提供 session/strategy/symbols/objective/initial_cash 等字段，可扩展更多默认值。",
+      "命令行脚本在未传参时应回退到配置中心，而非硬编码字面量，以便容器化部署通过 .env 管理。",
+      "自动化管道的回测阈值与是否执行回测属于业务可调参数，需要与 TradingSettings 对齐。",
+      "RiskPolicy 与调度模块也需要读取 risk/trading 设置，保持默认行为可配置。"
+    ]
+  },
+  "recommendation": {
+    "actions": [
+      "扩展 `TradingSettings`，覆盖指标列表、频率、回测配置与调度间隔等字段。",
+      "更新交易脚本与调度任务，优先使用 `get_settings()` 输出而非硬编码值。",
+      "同步完善 `.env.example`，列出新增的交易相关环境变量。"
+    ],
+    "status": "resolved",
+    "notes": "TradingSettings 已新增 TRADING_* 字段，交易脚本与调度改为回退配置；.env 示例与 README 已同步说明。"
+  }
+}

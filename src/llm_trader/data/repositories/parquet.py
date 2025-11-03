@@ -36,6 +36,35 @@ class ParquetRepository:
         _LOGGER.info("已写入证券主表", extra={"rows": len(cleaned), "path": str(path)})
         return path
 
+    def list_active_symbols(
+        self,
+        *,
+        include_inactive: bool = False,
+        limit: Optional[int] = None,
+    ) -> List[str]:
+        """返回存储中的标的代码列表。"""
+
+        path = self.manager.path_for(DatasetKind.SYMBOLS, ensure_dir=False)
+        if not path.exists():
+            return []
+        table = pq.read_table(path)
+        records = table.to_pylist()
+        symbols: List[str] = []
+        for record in records:
+            symbol = record.get("symbol")
+            if not symbol:
+                continue
+            status_raw = record.get("status", "active")
+            status = str(status_raw).lower() if status_raw is not None else "active"
+            if include_inactive or status in {"active", "", "nan"}:
+                symbols.append(str(symbol))
+        # 去重并排序，保持稳定
+        unique_symbols = list(dict.fromkeys(symbols))
+        unique_symbols.sort()
+        if limit is not None:
+            return unique_symbols[:limit]
+        return unique_symbols
+
     def write_trading_calendar(self, records: Sequence[Record]) -> Path:
         if not records:
             raise ValueError("交易日历数据为空")

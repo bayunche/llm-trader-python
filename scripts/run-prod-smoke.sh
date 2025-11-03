@@ -11,6 +11,7 @@ fi
 docker build -t llm-trader/prod -f "${PROJECT_ROOT}/Dockerfile" "${PROJECT_ROOT}"
 
 docker run --rm \
+  --entrypoint python \
   -e PYTHONPATH=/app/src \
   llm-trader/prod \
-  python -m pytest
+  -m pytest

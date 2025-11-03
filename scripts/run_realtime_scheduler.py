@@ -12,7 +12,11 @@ from llm_trader.tasks.realtime import start_scheduler
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Start realtime quotes scheduler")
-    parser.add_argument("--symbols", nargs="+", required=True, help="证券代码列表，例如 600000.SH 000001.SZ")
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        help="证券代码列表，例如 600000.SH 000001.SZ；未提供时自动使用证券主表中的全部标的",
+    )
     parser.add_argument("--interval", type=int, default=1, help="调度间隔（分钟）")
     return parser.parse_args()
 
