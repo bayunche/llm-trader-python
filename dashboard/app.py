@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 import os
 import sys
 from pathlib import Path
@@ -69,6 +70,42 @@ def _render_pipeline_status() -> None:
         st.info("尚未记录任何阶段信息。")
 
 
+def _pagination_controls(prefix: str, total: int, *, default_size: int = 50) -> Tuple[int, int, int, int]:
+    """渲染分页控件并返回 offset、page_size、page_index、max_page。"""
+
+    if total <= 0:
+        return 0, default_size, 1, 1
+    options = [20, 50, 100, 200, 500]
+    if default_size not in options:
+        options.append(default_size)
+    options = sorted(set(options))
+    page_size = st.selectbox(
+        "每页条数",
+        options,
+        index=options.index(default_size) if default_size in options else 0,
+        key=f"{prefix}-page-size",
+    )
+    max_page = max(1, math.ceil(total / page_size))
+    page_options = [str(index) for index in range(1, max_page + 1)]
+    selected = st.selectbox(
+        "页码",
+        page_options,
+        index=0,
+        key=f"{prefix}-page-index",
+    )
+    page_index = int(selected)
+    offset = (page_index - 1) * page_size
+    return offset, page_size, page_index, max_page
+
+
+def _format_template_label(identifier: str) -> str:
+    if "/" in identifier:
+        scenario, name = identifier.split("/", 1)
+    else:
+        scenario, name = "default", identifier
+    return name if scenario == "default" else f"{scenario}/{name}"
+
+
 def _render_equity_multi(pairs: List[Tuple[str, str]]) -> None:
     records: List[pd.DataFrame] = []
     for strategy_id, session_id in pairs:
@@ -104,12 +141,18 @@ def _render_equity_multi(pairs: List[Tuple[str, str]]) -> None:
 
 
 def _render_orders(strategy_id: str, session_id: str) -> pd.DataFrame:
-    records = data.get_orders(strategy_id, session_id)
-    if not records:
+    total = data.count_orders(strategy_id, session_id)
+    if total == 0:
         st.info("暂无订单数据")
         return pd.DataFrame()
+    offset, page_size, page_index, max_page = _pagination_controls(
+        f"orders-{strategy_id}-{session_id}",
+        total,
+    )
+    records = data.get_orders(strategy_id, session_id, limit=page_size, offset=offset)
     df = pd.DataFrame(records).sort_values("created_at")
     st.dataframe(df)
+    st.caption(f"第 {page_index}/{max_page} 页，共 {total} 条订单")
     st.download_button(
         "下载订单 CSV",
         df.to_csv(index=False).encode("utf-8"),
@@ -119,12 +162,19 @@ def _render_orders(strategy_id: str, session_id: str) -> pd.DataFrame:
 
 
 def _render_trades(strategy_id: str, session_id: str) -> pd.DataFrame:
-    records = data.get_trades(strategy_id, session_id)
-    if not records:
+    total = data.count_trades(strategy_id, session_id)
+    if total == 0:
         st.info("暂无成交数据")
         return pd.DataFrame()
+    offset, page_size, page_index, max_page = _pagination_controls(
+        f"trades-{strategy_id}-{session_id}",
+        total,
+        default_size=100,
+    )
+    records = data.get_trades(strategy_id, session_id, limit=page_size, offset=offset)
     df = pd.DataFrame(records).sort_values("timestamp")
     st.dataframe(df)
+    st.caption(f"第 {page_index}/{max_page} 页，共 {total} 条成交")
     st.download_button(
         "下载成交 CSV",
         df.to_csv(index=False).encode("utf-8"),
@@ -135,10 +185,28 @@ def _render_trades(strategy_id: str, session_id: str) -> pd.DataFrame:
 
 def _render_llm_logs(strategy_id: str, session_id: str) -> List[dict]:
     st.subheader("LLM 策略日志")
-    records = data.get_llm_logs(strategy_id, session_id, limit=50)
-    if not records:
+    total_logs = data.count_llm_logs(strategy_id, session_id)
+    if total_logs == 0:
         st.info("暂无日志数据")
         return []
+    limit_candidates = [value for value in (20, 50, 100, 200) if value < total_logs]
+    limit_candidates.append(total_logs)
+    default_value = 50 if 50 in limit_candidates else limit_candidates[0]
+    selected_value = st.selectbox(
+        "显示日志条数",
+        limit_candidates,
+        index=limit_candidates.index(default_value),
+        format_func=lambda value: "全部" if value == total_logs else f"{value} 条",
+        key=f"logs-limit-{strategy_id}-{session_id}",
+    )
+    if selected_value == total_logs:
+        offset = 0
+        limit = None
+    else:
+        limit = selected_value
+        offset = max(total_logs - limit, 0)
+    records = data.get_llm_logs(strategy_id, session_id, limit=limit, offset=offset)
+    st.caption(f"最近展示 {len(records)} 条，共 {total_logs} 条日志")
     for record in records:
         st.markdown(f"**时间**：{record.get('timestamp')}")
         st.markdown(f"**策略目标**：{record.get('objective', '')}")
@@ -212,17 +280,36 @@ def main() -> None:
         if not templates:
             st.info("未发现任何提示词模板。")
         else:
-            selected_template = st.selectbox("选择模板", templates, index=0)
+            labels = {_format_template_label(item): item for item in templates}
+            selected_label = st.selectbox("选择模板", list(labels.keys()), index=0)
+            selected_template = labels[selected_label]
             template_info = data.load_prompt_template(selected_template)
             source = template_info.get("source", "default")
             updated_at = template_info.get("updated_at", "")
-            st.caption(f"来源：{source} | 最近更新时间：{updated_at or '未知'}")
+            scenario = template_info.get("scenario", "default")
+            version_id = template_info.get("version_id", "")
+            st.caption(
+                f"场景：{scenario} | 来源：{source} | 当前版本：{version_id or '未知'} | 最近更新时间：{updated_at or '未知'}"
+            )
             content = st.text_area(
                 "模板内容（使用 {objective}、{symbols}、{indicators}、{historical_summary} 占位符）",
                 value=template_info.get("content", ""),
                 height=260,
                 key=f"template-editor-{selected_template}",
             )
+            history = template_info.get("history") or []
+            if history:
+                history_df = pd.DataFrame(history)[["version_id", "updated_at"]]
+                st.dataframe(history_df, use_container_width=True)
+                selected_version = st.selectbox(
+                    "选择历史版本",
+                    [item["version_id"] for item in history],
+                    key=f"version-select-{selected_template}",
+                )
+                if st.button("恢复到所选版本", key=f"restore-{selected_template}"):
+                    restored = data.restore_prompt_template_version(selected_template, selected_version)
+                    st.success(f"已恢复到版本 {selected_version}")
+                    st.experimental_rerun()
             col_save, col_reset = st.columns([2, 1])
             with col_save:
                 if st.button("保存修改", key=f"save-{selected_template}"):
@@ -252,6 +339,9 @@ def main() -> None:
 
         with st.sidebar:
             st.caption("默认读取本地 data_store，请先运行交易循环生成数据。")
+            if st.button("刷新数据缓存", key="refresh-cache"):
+                data.invalidate_cache()
+                st.experimental_rerun()
             selected_labels = st.multiselect("选择策略/会话", options, default=options[:1])
 
         if not selected_labels:

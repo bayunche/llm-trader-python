@@ -85,10 +85,11 @@ def _seed(tmp_path) -> None:
 
 def test_data_access(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    data.invalidate_cache()
     _seed(tmp_path)
 
-    orders = data.get_orders("strategy-ai", "session-1")
-    trades = data.get_trades("strategy-ai", "session-1")
+    orders = data.get_orders("strategy-ai", "session-1", limit=1)
+    trades = data.get_trades("strategy-ai", "session-1", limit=1)
     equity = data.get_equity_curve("strategy-ai", "session-1")
     logs = data.get_llm_logs("strategy-ai", "session-1")
     strategies = data.list_strategy_ids()
@@ -102,6 +103,10 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     assert "strategy-ai" in strategies
     assert {"strategy_id": "strategy-ai", "session_id": "session-1"} in sessions
     assert versions and versions[0].version_id == "v1"
+    assert data.count_orders("strategy-ai", "session-1") == 1
+    assert data.count_trades("strategy-ai", "session-1") == 1
+    assert data.count_equity_points("strategy-ai", "session-1") >= 1
+    assert data.count_llm_logs("strategy-ai", "session-1") == 1
 
 
 def test_load_pipeline_status_success(tmp_path, monkeypatch) -> None:
@@ -134,17 +139,23 @@ def test_load_pipeline_status_missing(tmp_path, monkeypatch) -> None:
 
 def test_prompt_template_crud(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    data.invalidate_cache()
     # 确保默认模板可列出
     templates = data.list_prompt_templates()
     assert "strategy" in templates
 
     saved = data.save_prompt_template("strategy", "测试模板：{objective}")
     assert saved["source"] == "custom"
+    assert saved["scenario"] == "default"
     assert "测试模板" in saved["content"]
 
     loaded = data.load_prompt_template("strategy")
     assert loaded["content"] == "测试模板：{objective}"
     assert loaded["source"] == "custom"
+    versions = data.list_prompt_template_versions("strategy")
+    assert versions
+    restored = data.restore_prompt_template_version("strategy", versions[0]["version_id"])
+    assert restored["content"] == saved["content"]
 
     reset = data.reset_prompt_template("strategy")
     assert reset["source"] == "default"

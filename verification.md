@@ -20,3 +20,9 @@
 | 2025-11-03 | `env PYTHONPATH=src python3 -m compileall scripts/healthcheck.py` | ✅ 通过 | 健康检查脚本语法检查 |
 | 2025-11-03 | `env PYTHONPATH=src python3 -m compileall tests/data/regression/test_data_quality.py` | ✅ 通过 | 数据质量回归测试语法检查 |
 | 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/data/regression/test_data_quality.py` | ⚠️ 未执行 | 当前环境缺少 pytest，请在具备依赖的环境补跑 |
+| 2025-11-03 | `bash scripts/run-tests-in-docker.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，容器内 pytest 未运行 |
+| 2025-11-03 | `bash scripts/run-prod-smoke.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，无法执行冒烟脚本 |
+| 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_policy.py` | ✅ 通过 | 风控策略库新增指标自测 |
+| 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_manager.py` | ✅ 通过 | 管线风控阻断与告警路径校验 |
+| 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/strategy/test_prompts.py` | ✅ 通过 | 提示词多模板与版本管理回归 |
+| 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/dashboard/test_data_access.py` | ✅ 通过 | 仪表盘缓存/分页与提示词版本回归 |

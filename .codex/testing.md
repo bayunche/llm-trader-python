@@ -38,3 +38,9 @@
 | 2025-11-03 17:50 | `env PYTHONPATH=src python3 -m pytest tests/pipeline/test_full_pipeline.py tests/trading/test_manager.py` | ⚠️ 未执行 | 当前环境缺少 pytest，请在安装依赖后重试 |
 | 2025-11-03 17:52 | `env PYTHONPATH=src python3 -m compileall scripts/healthcheck.py` | ✅ 通过 | 健康检查脚本语法检查 |
 | 2025-11-03 17:59 | `env PYTHONPATH=src python3 -m compileall tests/data/regression/test_data_quality.py` | ✅ 通过 | 数据质量回归测试语法检查 |
+| 2025-11-03 23:01 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_policy.py` | ✅ 通过 | 风险策略库扩展单元测试 |
+| 2025-11-03 23:02 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_manager.py` | ✅ 通过 | 风控阻断告警链路验证 |
+| 2025-11-03 23:16 | `env PYTHONPATH=src python3 -m pytest tests/strategy/test_prompts.py` | ✅ 通过 | 场景化提示词与版本管理测试 |
+| 2025-11-03 23:17 | `env PYTHONPATH=src python3 -m pytest tests/dashboard/test_data_access.py` | ✅ 通过 | 仪表盘缓存与分页回归测试 |
+| 2025-11-03 23:33 | `bash scripts/run-tests-in-docker.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，无法在容器内运行 pytest |
+| 2025-11-03 23:33 | `bash scripts/run-prod-smoke.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，冒烟脚本未能启动 |

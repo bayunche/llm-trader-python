@@ -143,6 +143,9 @@ class RiskSettings:
     max_equity_drawdown: float = field(default_factory=lambda: _env_float("RISK_MAX_EQUITY_DRAWDOWN", 0.1))
     max_position_ratio: float = field(default_factory=lambda: _env_float("RISK_MAX_POSITION_RATIO", 0.3))
     alert_channel: str = field(default_factory=lambda: _getenv("RISK_ALERT_CHANNEL", "log"))
+    max_equity_volatility: float = field(default_factory=lambda: _env_float("RISK_MAX_EQUITY_VOLATILITY", 0.0))
+    max_sector_exposure: float = field(default_factory=lambda: _env_float("RISK_MAX_SECTOR_EXPOSURE", 0.0))
+    max_holding_days: int = field(default_factory=lambda: _env_int("RISK_MAX_HOLDING_DAYS", 0))
 
 
 @dataclass

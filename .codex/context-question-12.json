@@ -1,0 +1,27 @@
+{
+  "question": "提示词模板是否已经支持 Phase C5 计划的多场景、多版本管理？",
+  "priority": "high",
+  "reason": "确认现状可指导后续设计，避免与现有实现冲突。",
+  "investigation_timestamp": "2025-11-03T20:52:25+08:00",
+  "findings": [
+    {
+      "evidence": "PromptTemplateManager 仅以模板名称作为文件名，用户自定义与默认目录均为平铺结构，缺少场景或版本区分。",
+      "paths": [
+        "src/llm_trader/strategy/prompts.py:33"
+      ]
+    },
+    {
+      "evidence": "模板测试仅覆盖单一名称读写与重置逻辑，未涉及场景或版本管理。",
+      "paths": [
+        "tests/strategy/test_prompts.py:22"
+      ]
+    },
+    {
+      "evidence": "仪表盘提示词管理界面仅提供模板下拉列表和内容编辑，没有筛选或版本切换控制。",
+      "paths": [
+        "dashboard/app.py:181"
+      ]
+    }
+  ],
+  "conclusion": "当前提示词管理仅支持单一维度模板，尚未实现 Phase C5 所需的多模板拓展与版本管理能力。"
+}

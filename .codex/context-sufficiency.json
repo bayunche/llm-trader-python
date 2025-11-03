@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "已明确全流程入口（scripts/run_full_pipeline.py、docker/entrypoint.sh）与核心配置（TRADING_EXECUTION_MODE、REPORT_OUTPUT_DIR），可在重构中拆分任务执行与仪表盘启动，并保持 TradingCycleConfig/AutoTradingConfig 契约不变。"
+    "notes": "已明确开发计划的阶段划分与验收标准，可对照代码与测试确认交付情况。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "继续沿用 Python 3.10 + pandas + Streamlit + 自研撮合引擎；Docker 单服务方案可保留，计划通过 bash/Python 脚本编排分阶段执行及错误处理，无需新增依赖。"
+    "notes": "掌握监控告警、数据质量测试与仪表盘实现所用的 Python/Streamlit/pytest 组合，便于评估功能落地程度。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "风险包括：run_full_pipeline 失败导致容器退出、live 模式未实现但可能被误用、文档与验证覆盖不足。已在深挖笔记中记录应对方案。"
+    "notes": "Phase C3-C5 已实装并通过单元测试、仪表盘测试验证，后续风险主要在持续维护与监测。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "将新增 pytest 覆盖执行模式切换、扩充 verification.md 步骤，并在 Docker 环境提供冒烟脚本验证沙盒流程；计划在重构后记录测试输出至 .codex/testing.md。"
+    "notes": "通过比对开发计划、关键模块源码与测试覆盖，验证各阶段完成度；如有缺口，将在报告中列为未完成项。"
   },
   "status": "ready_for_planning"
 }

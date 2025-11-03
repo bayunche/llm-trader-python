@@ -16,6 +16,7 @@
   ```
 - `TradingAlertService` 封装了常用交易事件（如风控阻断、流水线阶段失败）的告警调用。
 - `PipelineController` 与 `run_managed_trading_cycle` 在检测到失败或风控拒绝时会自动调用告警，不需要额外配置。
+- 风控策略模块 `RiskPolicy` 支持最大回撤、权益波动率、单标仓位、行业集中度以及持仓天数等阈值，可通过 `.env` 中的 `RISK_MAX_*` 配置，自 2025-11-03 版本起全部生效。
 
 ## 健康检查
 

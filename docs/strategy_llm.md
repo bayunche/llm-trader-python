@@ -77,9 +77,9 @@ candidate = StrategyCandidate(rules=suggestion.rules, metrics={}, equity_curve=[
 
 自版本 2025-11-03 起，提示词通过模板管理器统一加载：
 
-- 默认模板位于 `config/prompts/strategy.txt`，包含 `{objective}`、`{symbols}`、`{indicators}`、`{historical_summary}` 占位符。
-- 用户自定义模板存储在 `data_store/prompts/templates/<name>.txt`，`PromptTemplateManager` 会自动优先读取该文件。
-- Streamlit 仪表盘提供提示词管理面板，可查看、编辑、保存或重置模板；保存后下一次交易循环立即生效。
+- 默认模板位于 `config/prompts/`，支持按场景拆分目录（示例：`config/prompts/default/strategy.txt`）。模版需包含 `{objective}`、`{symbols}`、`{indicators}`、`{historical_summary}` 等占位符。
+- 用户自定义模板存储在 `data_store/prompts/templates/<scenario>/<name>/current.txt`，历史版本保存在 `versions/` 子目录，管理器会自动优先读取自定义内容。
+- Streamlit 仪表盘提供提示词管理面板，可查看场景、编辑内容、保存新版本、恢复指定历史版本或重置为默认模板；保存后下一次交易循环立即生效。
 - 模板缺少必要占位符时将抛出 `ValueError("提示词模板缺少占位符")`，请确保模板内容保持必需字段。
 
 ## 6. 注意事项

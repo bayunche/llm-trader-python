@@ -3,44 +3,46 @@
   "reason": "shrimp-task-manager 工具缺失，人工完成技术可行性分析。",
   "domains": [
     {
-      "area": "数据采集",
-      "feasibility": "中高",
-      "assumptions": [
-        "东方财富公开接口可通过 requests/httpx 获取。",
-        "采用 pandas + pyarrow 写入 Parquet，DuckDB/SQLite 负责查询。"
-      ],
-      "risks": ["接口频控与IP封禁", "数据字段变更"],
-      "mitigations": ["实现速率限制与缓存策略", "为字段增加映射配置"]
-    },
-    {
-      "area": "回测引擎",
-      "feasibility": "中",
-      "assumptions": [
-        "使用向量化 pandas 或 numba 加速撮合。",
-        "规则参数化可覆盖 T+1、涨跌停、费用等约束。"
-      ],
-      "risks": ["性能瓶颈", "复杂业务规则实现难度"],
-      "mitigations": ["先实现日线撮合再扩展分钟线", "建立回测单元测试确保正确性"]
-    },
-    {
-      "area": "策略生成",
-      "feasibility": "中",
-      "assumptions": [
-        "使用 scikit-learn、optuna / nevergrad 等现成库进行搜索与优化。",
-        "策略规则库可配置化管理。"
-      ],
-      "risks": ["搜索空间爆炸", "过拟合风险"],
-      "mitigations": ["限制特征组合规模", "使用样本外验证与惩罚项"]
-    },
-    {
-      "area": "服务与仪表盘",
+      "area": "Phase 状态确认",
       "feasibility": "高",
       "assumptions": [
-        "FastAPI+Uvicorn 提供REST接口。",
-        "Streamlit/Dash 提供交互仪表盘。"
+        "开发计划.md 中的阶段描述与仓库提交保持同步。",
+        "operations-log.md 可辅助确认历史操作记录。"
       ],
-      "risks": ["数据同步延迟", "前后端数据契约不一致"],
-      "mitigations": ["集中数据访问层", "定义 pydantic schema 保持一致"]
+      "risks": [
+        "计划文档未及时更新，导致判断失真"
+      ],
+      "mitigations": [
+        "结合源码与测试验证，以代码证据为准，出现冲突时在结论中说明。"
+      ]
+    },
+    {
+      "area": "代码证据收集",
+      "feasibility": "高",
+      "assumptions": [
+        "关键模块（监控、数据质量、仪表盘）在仓库内具备可读源码。",
+        "测试用例能够反映已落地的交付物。"
+      ],
+      "risks": [
+        "存在未合并分支或私有模块导致证据缺失"
+      ],
+      "mitigations": [
+        "通过搜索与 cross-reference 验证，若缺失则在报告中列出信息缺口。"
+      ]
+    },
+    {
+      "area": "风险与后续建议",
+      "feasibility": "中高",
+      "assumptions": [
+        "可以根据缺失功能推导出后续工作建议。",
+        "现有测试与文档能证明已完成范围。"
+      ],
+      "risks": [
+        "缺少定量性能指标，难以界定 Phase C3 的完成标准"
+      ],
+      "mitigations": [
+        "在结论中阐明缺乏指标的风险，并提出需要明确验收标准的建议。"
+      ]
     }
   ]
 }

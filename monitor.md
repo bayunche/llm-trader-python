@@ -1,38 +1,26 @@
-# Phase C 监控与告警扩展计划
+# Phase C 监控与告警交付总结
 
 > 更新时间：2025-11-03 ｜ 执行者：Codex
 
-## 目标
+## 交付成果
 
-- 提供实时与离线告警能力：涵盖回撤、仓位占比、自动化任务失败等场景。
-- 统一监控配置入口，支持本地与 Docker 部署。
-- 补充健康检查端点，便于容器与外部监控平台使用。
+- **告警渠道抽象**：`llm_trader.monitoring.AlertEmitter` 支持 `log/stdout/stderr` 渠道，日志 extra 字段统一为 `alert_message`，避免与内置字段冲突。
+- **触发路径覆盖**：
+  - `PipelineController` 在预检、数据同步、自动交易阶段失败时写入状态文件并触发告警；
+  - `run_managed_trading_cycle` 在风控拒绝时推送回撤/仓位/原因详情；
+  - 风控策略库新增波动率、行业集中度、持仓时长阈值，并同步写入告警详情。
+- **健康检查脚本**：`scripts/healthcheck.py` 校验状态文件、必需阶段状态与提示词模板占位符，返回码符合容器健康检查要求。
+- **配置与文档**：`.env.example` 新增 `RISK_MAX_EQUITY_VOLATILITY`、`RISK_MAX_SECTOR_EXPOSURE`、`RISK_MAX_HOLDING_DAYS`；README、docs/monitoring.md 等已同步说明。
+- **测试保障**：`tests/trading/test_policy.py`、`tests/trading/test_manager.py` 验证新增阈值与告警链路；`tests/dashboard/test_data_access.py` 捕捉仪表盘状态刷新。
 
-## 交付项
+## 当前状态
 
-1. **告警渠道抽象**：在 `llm_trader.monitoring` 增加告警发布接口，默认实现日志/邮件/钉钉（mock）。
-2. **告警触发点**：
-   - `PipelineController` 阶段失败时触发告警。
-   - `run_managed_trading_cycle` 风控拒绝时推送回撤/仓位信息。
-   - 数据同步任务失败时触发通知。
-3. **健康检查**：新增 `scripts/healthcheck.py` 或 FastAPI 路由，检查数据存储、历史数据、策略模板以及最近一次流水线状态文件。
-4. **配置管理**：在 `.env` 中开放告警渠道及阈值配置（如 `MONITORING_ALERT_CHANNEL`, `ALERT_WEBHOOK_URL`）。
-5. **测试与文档**：
-   - pytest 覆盖告警触发逻辑（使用 fake publisher）。
-   - README/开发计划/项目需求同步说明 Phase C 能力。
+- Docker 入口脚本在任意阶段失败时仍会启动 Dashboard，并在顶部提示 `blocked/failed` 阶段。
+- `MONITORING_ALERT_CHANNEL` 可在 `.env` 中覆盖；恢复为 `log` 时不会产生额外依赖。
+- 健康检查脚本已列入 `verification.md` 和 `.codex/testing.md`，建议在 CI 或 Compose 中定时执行。
 
-## 时间规划
+## 后续方向
 
-| 步骤 | 内容 | 预估 | 备注 |
-| --- | --- | --- | --- |
-| C1.1 | 告警抽象与默认实现 | 1.5 天 | 新增 `monitoring/alerts.py` 扩展接口 |
-| C1.2 | 自动化流程告警接入 | 1 天 | PipelineController、run_managed_trading_cycle |
-| C1.3 | 健康检查脚本/接口 | 1 天 | Docker healthcheck & CLI |
-| C1.4 | 文档与测试补充 | 0.5 天 | 更新 README、verification.md、tests |
-
-## 验收标准
-
-- 当任一阶段失败或风控拒绝时，告警接口被调用并可在日志中确认。
-- Docker 启动后运行 `python scripts/healthcheck.py` 返回 0 表示健康。
-- 所有告警配置可通过 `.env` 覆盖；禁用告警时不会抛出异常。
-- README 与 docs 中提供告警配置使用说明；verification.md 记录健康检查命令。
+- 接入企业 IM/邮件等实战告警渠道，可在 `AlertEmitter` 基础上扩展 webhook 客户端。
+- 健康检查可考虑增加 FastAPI 路由，用于 Kubernetes Liveness/Readiness 探针。
+- 结合风险策略阈值，后续可将告警与 Dashboard 提示绑定，为用户提供实时风险面板。*** End Patch

@@ -1,140 +1,103 @@
 {
-  "scan_timestamp": "2025-11-03T15:25:45+08:00",
+  "scan_timestamp": "2025-11-03T23:23:48+08:00",
   "areas": [
     {
-      "name": "交易执行模式配置",
+      "name": "开发计划阶段状态",
       "locations": [
-        "src/llm_trader/config/settings.py",
-        "src/llm_trader/trading/execution_adapters.py",
-        "src/llm_trader/trading/orchestrator.py",
-        ".env.example",
-        "docker-compose.prod.yml"
+        "开发计划.md",
+        ".codex/operations-log.md"
       ],
-      "current_state": "TradingSettings.execution_mode 通过环境变量 TRADING_EXECUTION_MODE 读取，默认 sandbox；orchestrator 创建 TradingSession 时依据 config.execution_mode 选择沙盒或实盘适配器；实盘适配器目前未实现，直接抛出 NotImplementedError。",
+      "current_state": "Phase A 与 Phase B 均标记为已完成；2025-11-03 版本的计划现已完成 Phase C 全部子项（C1-C5），对应代码与测试已合并。",
       "similar_cases": [
-        "tests/trading/test_session.py",
-        "tests/trading/test_orchestrator.py"
-      ],
-      "tech_stack": [
-        "Python 3.10",
-        "dataclasses",
-        "自研撮合引擎"
-      ],
-      "tests": [
-        "tests/trading/test_session.py",
-        "tests/trading/test_orchestrator.py",
-        "tests/pipeline/test_auto.py"
-      ],
-      "notes": "当前代码已支持通过环境变量切换执行模式，但缺乏针对 live 模式的安全开关提示，并且文档需明确说明 live 需要额外适配器支持。"
-    },
-    {
-      "name": "全流程自动化脚本",
-      "locations": [
-        "scripts/run_full_pipeline.py",
-        "src/llm_trader/pipeline/auto.py",
-        "src/llm_trader/trading/orchestrator.py",
-        "src/llm_trader/backtest"
-      ],
-      "current_state": "run_full_pipeline.py 同步标的与行情后构建 AutoTradingConfig，串联 run_full_automation（策略→回测→风控→报表）；当前逻辑在 run_backtest 为真时若缺少数据或达不到指标会提前退出。",
-      "similar_cases": [
-        "tests/pipeline/test_auto.py"
-      ],
-      "tech_stack": [
-        "pandas",
-        "自研 BacktestRunner",
-        "llm_trader.trading orchestrator"
-      ],
-      "tests": [
-        "tests/pipeline/test_auto.py",
-        "tests/backtest/test_engine.py",
-        "tests/tasks/test_managed_cycle.py"
-      ],
-      "notes": "需确认当 run_backtest=false 时依然保证交易执行与报表流程完整，避免 live 模式受回测回退路径影响。"
-    },
-    {
-      "name": "Docker 启动与集成",
-      "locations": [
-        "Dockerfile",
-        "docker/entrypoint.sh",
-        "docker-compose.prod.yml",
-        "start.sh",
-        "dashboard/app.py"
-      ],
-      "current_state": "生产镜像 ENTRYPOINT 执行 run_full_pipeline.py 后启动 Streamlit 仪表盘；docker-compose 暴露 DASHBOARD_PORT 并挂载工程目录，单服务容器同时承担数据同步、策略执行和仪表盘职责。",
-      "similar_cases": [
-        "docs/realtime_data.md",
-        "README.md"
-      ],
-      "tech_stack": [
-        "Docker",
-        "Streamlit",
-        "bash"
-      ],
-      "tests": [
-        "无专门自动化测试，依赖手动或冒烟脚本"
-      ],
-      "notes": "当前入口一旦 run_full_pipeline 失败会导致 dashboard 无法启动；需评估重构结构以分阶段执行并暴露状态。"
-    },
-    {
-      "name": "报表与仪表盘",
-      "locations": [
-        "src/llm_trader/reports",
-        "dashboard/app.py",
-        "tests/dashboard/test_data.py",
-        "README.md"
-      ],
-      "current_state": "ReportBuilder/ReportWriter 在 pipeline.auto 中被调用写入报告；dashboard 读取 reports 目录展示交易结果和 LLM 日志；需确保重构后输出路径与仪表盘数据源保持一致。",
-      "similar_cases": [
-        "tests/dashboard/test_data.py"
-      ],
-      "tech_stack": [
-        "pandas",
-        "streamlit",
-        "altair"
-      ],
-      "tests": [
-        "tests/dashboard/test_data.py"
-      ],
-      "notes": "报表目录由 REPORT_OUTPUT_DIR 控制，默认 reports；仪表盘预期同目录可访问。"
-    },
-    {
-      "name": "配置与文档",
-      "locations": [
-        ".env.example",
-        "README.md",
-        "docs/",
-        "verification.md"
-      ],
-      "current_state": "文档描述需要在 .env 中配置 API key 及执行模式，但未强调 live 模式需要额外券商适配器；验证文档未覆盖 live/sandbox 切换测试步骤。",
-      "similar_cases": [
-        "docs/strategy_llm.md",
-        "docs/realtime_data.md"
+        "monitor.md",
+        "docs/monitoring.md"
       ],
       "tech_stack": [
         "Markdown",
         "Poetry/pytest 工作流"
       ],
       "tests": [
-        "verification.md（手工步骤）"
+        "verification.md",
+        "tests/pipeline/test_full_pipeline.py"
       ],
-      "notes": "需要统一更新所有文档描述，避免用户误以为 live 模式已可用。"
+      "notes": "需结合代码与测试进展确认 Phase C 剩余事项的实际实施程度。"
+    },
+    {
+      "name": "监控告警增强（Phase C1）",
+      "locations": [
+        "src/llm_trader/monitoring/alerts.py",
+        "scripts/run_full_pipeline.py",
+        "src/llm_trader/trading/manager.py",
+        "src/llm_trader/trading/alerts.py"
+      ],
+      "current_state": "AlertEmitter 支持 log/stdout/stderr 渠道；PipelineController 在预检、数据同步和自动交易失败场景写入阶段状态并发送告警；TradingManager 在风险策略拒绝时通过 TradingAlertService 触发“风控阻断”提示。",
+      "similar_cases": [
+        "tests/pipeline/test_full_pipeline.py",
+        "tests/trading/test_manager.py"
+      ],
+      "tech_stack": [
+        "Python 3.10",
+        "dataclasses",
+        "logging"
+      ],
+      "tests": [
+        "tests/pipeline/test_full_pipeline.py",
+        "tests/trading/test_manager.py"
+      ],
+      "notes": "实现与开发计划中 Phase C1 完成状态一致。"
+    },
+    {
+      "name": "数据质量回归集（Phase C2）",
+      "locations": [
+        "tests/data/regression/test_data_quality.py",
+        "src/llm_trader/data/repositories/parquet.py",
+        "data_store/"
+      ],
+      "current_state": "回归测试利用临时 Parquet 仓库校验标的、交易日历与订单分区结构，覆盖关键数据集字段和分区命名。",
+      "similar_cases": [
+        "tests/data/test_repositories.py"
+      ],
+      "tech_stack": [
+        "PyArrow",
+        "pytest",
+        "ParquetRepository"
+      ],
+      "tests": [
+        "tests/data/regression/test_data_quality.py"
+      ],
+      "notes": "佐证开发计划中 Phase C2 已完成。"
+    },
+    {
+      "name": "仪表盘与性能优化（Phase C3-C5）",
+      "locations": [
+        "dashboard/app.py",
+        "docs/monitoring.md",
+        "tests/dashboard/test_data_access.py"
+      ],
+      "current_state": "仪表盘增加数据缓存与分页控制，提示词面板支持场景选择、版本历史与恢复；风控策略库新增波动率、行业集中度、持仓时长校验逻辑。",
+      "similar_cases": [
+        "docs/monitoring.md",
+        "src/llm_trader/strategy/prompts.py"
+      ],
+      "tech_stack": [
+        "Streamlit",
+        "pandas",
+        "Altair"
+      ],
+      "tests": [
+        "tests/dashboard/test_data_access.py"
+      ],
+      "notes": "相关测试 `tests/dashboard/test_data_access.py`、`tests/strategy/test_prompts.py`、`tests/trading/test_policy.py` 已覆盖新增能力。"
     }
   ],
   "observation_report": {
     "anomalies": [
-      "LiveBrokerExecutionAdapter 仍为占位实现，需要在文档中明确，并在执行入口处添加保护提示。",
-      "未找到 code-index MCP 工具，当前依靠 shell/rg 进行检索，已记录原因。"
+      "sequential-thinking MCP 工具在当前环境缺失，只能以人工方式记录思考过程，已在操作日志中说明。"
     ],
-    "information_gaps": [
-      "尚未确认 docker 容器内运行失败时如何重试整个流程，需要在重构阶段规划。",
-      "需要了解 dashboard 当前依赖的报表结构，以便重构后保持兼容。"
-    ],
-    "suggested_deep_dives": [
-      "跟进 run_full_pipeline 失败时的异常处理逻辑，评估是否需要拆分为可重启子流程。",
-      "梳理 tests/pipeline/test_auto.py 与实际运行流程的覆盖差距，为后续测试补强提供依据。"
-    ],
+    "information_gaps": [],
+    "suggested_deep_dives": [],
     "tool_notes": {
-      "code_index": "未提供对应 MCP 工具，已在日志和上下文记录改用 shell/rg 的替代方案。"
+      "code_index": "未提供对应 MCP 工具，继续采用 shell/rg 方式检索并在日志中留痕。"
     }
   }
 }

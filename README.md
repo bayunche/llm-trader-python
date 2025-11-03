@@ -11,9 +11,10 @@
 - **大模型策略生成**：`LLMStrategyGenerator`（`src/llm_trader/strategy/llm_generator.py`）基于 OpenAI Chat Completions 输出策略规则与 `selected_symbols`，并在 `LLMStrategyLogRepository` 中留痕。
 - **模拟交易执行**：`run_ai_trading_cycle`（`src/llm_trader/trading/orchestrator.py`）将实时行情、LLM 策略与历史数据结合，通过 `TradingSession` 复用回测撮合引擎，实现下单与账户记录。
 - **自动化流水线**：`run_full_automation`（`src/llm_trader/pipeline/auto.py`）串联策略生成、历史回测、风险评估，便于构建全自动模拟流程。
-- **调度与可视化**：`scripts/run_scheduler.py` 结合 APScheduler 执行数据/交易作业，`dashboard/app.py` 基于 Streamlit 展示资金曲线、订单、成交及 LLM 日志，支持提示词模板在线管理。
+- **调度与可视化**：`scripts/run_scheduler.py` 结合 APScheduler 执行数据/交易作业，`dashboard/app.py` 基于 Streamlit 展示资金曲线、订单、成交及 LLM 日志，支持场景化提示词模板、版本历史与一键恢复。
 - **执行模式切换**：通过 `.env` 中的 `TRADING_EXECUTION_MODE` 和券商配置自动选择沙盒或实盘适配器；默认提供 mock 券商实现便于模拟 live 流程。
 - **报表生成**：`llm_trader.reports` 支持将交易结果导出为 CSV/Markdown/JSON，自动化流程与 Docker 启动时会自动生成。
+- **风控与告警**：`RiskPolicy` 支持最大回撤、权益波动率、单标仓位、行业集中度、持仓时间等阈值；`PipelineController`、`run_managed_trading_cycle` 在异常时触发告警并写入状态文件。
 
 ---
 
@@ -128,15 +129,15 @@ env PYTHONPATH=src python scripts/healthcheck.py
 
 ---
 
-## 路线图（重点缺口与改造）
+## 路线图（下一阶段重点）
 
 | 优先级 | 事项 | 目标 |
 | --- | --- | --- |
-| P0 | 接入真实券商执行适配器 | 在 `live` 模式下完成真实下单、资金同步与异常回滚，替换当前占位实现。 |
-| P1 | 扩充监控与风控策略 | 增强交易后风险告警、配置化阈值、执行日志审计。 |
-| P1 | 丰富测试资产 | 引入多标的、多频率、异常行情用例，覆盖沙盒/实盘模式与报表。 |
-| P2 | 仪表盘性能与交互优化 | 提升大数据量下的加载体验，整合更多对比分析工具。 |
-| P2 | Docker 周期化管道 | 在单容器环境中增加定时调度或多轮执行能力。 |
+| P0 | 接入真实券商执行适配器 | 在 `live` 模式下完成真实下单、资金同步与异常回滚，替换当前 mock 实现。 |
+| P1 | 扩展风控指标生态 | 引入资金曲线 VaR、敞口黑名单、日内波动限额等配置化指标，与现有阈值协同。 |
+| P1 | 多账户/多策略提示词治理 | 为多个账户维护独立模板仓库、审批流程与版本审计，增强合规可追溯性。 |
+| P2 | Docker 周期化管道 | 在单容器环境内实现多轮执行/恢复能力，提供作业状态 API 与重试策略。 |
+| P2 | 数据资产回溯 | 构建行情/报表归档与落差检测机制，补齐历史数据断档提醒。 |
 
 路线图对应的开发任务会同步体现在《开发计划.md》中，欢迎按需调整优先级。
 

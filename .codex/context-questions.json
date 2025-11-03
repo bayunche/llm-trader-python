@@ -1,28 +1,8 @@
 {
   "known": [
-    "TRADING_EXECUTION_MODE 默认 sandbox，已在配置解析与管线预检中限制 live 模式执行。",
-    "PipelineController 会将执行阶段与警示写入 REPORT_OUTPUT_DIR/status.json，并由仪表盘读取展示。",
-    "仪表盘当前展示策略日志、资金曲线等信息，但尚未提供提示词编辑入口。"
+    "开发计划.md 显示 Phase A/B 完成，Phase C 各子项（C1-告警、C2-数据质量、C3-仪表盘优化、C4-风险策略、C5-提示词多模板）已交付并通过对应测试。",
+    "仪表盘数据接口与 UI 已加入缓存、分页、版本恢复；RiskPolicy 支持波动率、行业集中度与持仓时长；提示词管理器新增场景化与版本库。"
   ],
-  "unknown": [
-    {
-      "question": "策略提示词模板需要存放在哪里，并如何设计默认模板与用户自定义的合并逻辑？",
-      "priority": "high",
-      "blocking": true,
-      "notes": "需确认存储介质（本地文件、配置仓库或数据库）以及加载优先级，确保容器化环境可写。"
-    },
-    {
-      "question": "仪表盘提供提示词修改后如何持久化并影响后续 LLMStrategyGenerator 的生成流程？",
-      "priority": "high",
-      "blocking": true,
-      "notes": "须定义接口或服务层调用，避免直接写入源码，考虑与 PipelineController 的集成。"
-    },
-    {
-      "question": "多策略/多会话场景下提示词是否区分策略、执行模式或场景，需要怎样的版本管理？",
-      "priority": "medium",
-      "blocking": false,
-      "notes": "可能需要按策略或模板类型分类存储，避免互相覆盖。"
-    }
-  ],
-  "notes": "新增需求聚焦提示词配置与仪表盘编辑能力，后续规划需围绕存储、加载和 UI 修改展开。"
+  "unknown": [],
+  "notes": "Phase C 主要疑问已关闭，后续关注点转向持续验证与文档同步。"
 }

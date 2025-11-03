@@ -54,3 +54,15 @@ def test_load_template_missing(tmp_path: Path) -> None:
     manager = _build_manager(tmp_path)
     with pytest.raises(FileNotFoundError):
         manager.load_template("unknown")
+
+
+def test_template_versions_and_restore(tmp_path: Path) -> None:
+    manager = _build_manager(tmp_path)
+    manager.save_template("strategy", "版本1")
+    manager.save_template("strategy", "版本2")
+    versions = manager.list_versions("strategy")
+    assert len(versions) >= 2
+    first_version = versions[-1]["version_id"]
+    manager.restore_version("strategy", first_version)
+    template = manager.load_template("strategy")
+    assert template.content == "版本1"

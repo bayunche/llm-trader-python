@@ -4,63 +4,21 @@
   "tasks": [
     {
       "id": "T1",
-      "title": "初始化项目骨架",
-      "milestone": "M1 数据基座",
-      "deliverables": ["项目目录结构", "依赖管理文件", "基础配置"]
+      "title": "整理开发计划与历史记录",
+      "milestone": "P1 收集阶段证据",
+      "deliverables": ["阶段状态摘录", "关键文档引用清单"]
     },
     {
       "id": "T2",
-      "title": "实现代码表与交易日历采集",
-      "milestone": "M1 数据基座",
-      "deliverables": ["数据抓取脚本", "数据存储方案", "单元测试"]
+      "title": "对照代码与测试验证阶段成果",
+      "milestone": "P2 完成度评估",
+      "deliverables": ["Phase A/B/C 对应代码证据", "未完成事项列表"]
     },
     {
       "id": "T3",
-      "title": "实现日线数据采集与增量更新",
-      "milestone": "M1 数据基座",
-      "deliverables": ["K线抓取模块", "增量更新逻辑", "数据验证测试"]
-    },
-    {
-      "id": "T4",
-      "title": "搭建回测引擎 MVP",
-      "milestone": "M2 回测引擎",
-      "deliverables": ["撮合逻辑", "费用与约束处理", "回测测试用例"]
-    },
-    {
-      "id": "T5",
-      "title": "记录回测结果与持久化",
-      "milestone": "M2 回测引擎",
-      "deliverables": ["结果存储结构", "日志与流水记录", "验证脚本"]
-    },
-    {
-      "id": "T6",
-      "title": "策略生成与优化模块",
-      "milestone": "M3 策略生成",
-      "deliverables": ["规则库", "优化流程", "策略评估测试"]
-    },
-    {
-      "id": "T7",
-      "title": "服务层 API 实现",
-      "milestone": "M4 服务与仪表盘",
-      "deliverables": ["FastAPI 路由", "API 文档", "接口测试"]
-    },
-    {
-      "id": "T8",
-      "title": "仪表盘与可视化",
-      "milestone": "M4 服务与仪表盘",
-      "deliverables": ["净值折线图", "回撤/收益图表", "交互测试"]
-    },
-    {
-      "id": "T9",
-      "title": "报告导出与调度监控",
-      "milestone": "M5 调度与优化",
-      "deliverables": ["报告模板", "调度任务", "监控脚本"]
-    },
-    {
-      "id": "T10",
-      "title": "综合测试与文档收尾",
-      "milestone": "M5 调度与优化",
-      "deliverables": ["测试报告", "文档套件", "交付清单"]
+      "title": "生成阶段结论与建议",
+      "milestone": "P3 输出项目阶段结论",
+      "deliverables": ["阶段判断摘要", "风险与后续建议", "待确认事项列表"]
     }
   ]
 }

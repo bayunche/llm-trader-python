@@ -1,0 +1,27 @@
+{
+  "question": "现有风险控制策略是否已经支持 Phase C4 提到的波动、行业集中度、时间止损指标？",
+  "priority": "high",
+  "reason": "若当前策略库尚不具备这些指标，需规划新增实现以完成 Phase C4。",
+  "investigation_timestamp": "2025-11-03T20:52:10+08:00",
+  "findings": [
+    {
+      "evidence": "`RiskThresholds` 仅包含 `max_equity_drawdown` 与 `max_position_ratio` 两个字段，未涉及波动或时间控制。",
+      "paths": [
+        "src/llm_trader/trading/policy.py:11"
+      ]
+    },
+    {
+      "evidence": "`RiskPolicy.evaluate` 只调用 `_check_drawdown` 与 `_check_position_exposure`，无其他风险指标逻辑。",
+      "paths": [
+        "src/llm_trader/trading/policy.py:39"
+      ]
+    },
+    {
+      "evidence": "`RiskSettings` 中仅暴露最大回撤与仓位占比两个配置项，对应环境变量也未扩展。",
+      "paths": [
+        "src/llm_trader/config/settings.py:139"
+      ]
+    }
+  ],
+  "conclusion": "风险策略库尚未覆盖 Phase C4 目标提到的新增指标，需要扩展阈值配置与评估逻辑。"
+}

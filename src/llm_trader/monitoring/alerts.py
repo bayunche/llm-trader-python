@@ -22,7 +22,7 @@ class AlertEmitter:
     channel: str = AlertChannel.LOG
 
     def emit(self, message: str, *, details: Optional[Dict[str, object]] = None) -> None:
-        payload = {"message": message, "details": details or {}}
+        payload = {"alert_message": message, "details": details or {}}
         if self.channel == AlertChannel.LOG:
             logging.getLogger("monitoring.alert").warning(message, extra=payload)
         elif self.channel == AlertChannel.STDOUT:

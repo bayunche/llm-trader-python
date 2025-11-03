@@ -72,3 +72,4 @@ print(path)
 - 若需要分布式存储（如 S3），可替换 `data_store_dir` 实现，保持接口不变。
 - `tests/data/regression` 将存放数据质量回归样本，通过 pytest 校验字段、一致性与分区结构。
 - `scripts/healthcheck.py` 会检测状态文件与提示词模板；后续可扩展为读取回归数据并执行质量校验。
+- 场景化提示词模板存储在 `prompts/templates/<scenario>/<name>/`，当前版本会在 `current.txt` 写入最新内容，并在 `versions/` 目录保留历史记录，便于仪表盘回滚。
