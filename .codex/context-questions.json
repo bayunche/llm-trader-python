@@ -1,8 +1,13 @@
 {
   "known": [
-    "开发计划.md 显示 Phase A/B 完成，Phase C 各子项（C1-告警、C2-数据质量、C3-仪表盘优化、C4-风险策略、C5-提示词多模板）已交付并通过对应测试。",
-    "仪表盘数据接口与 UI 已加入缓存、分页、版本恢复；RiskPolicy 支持波动率、行业集中度与持仓时长；提示词管理器新增场景化与版本库。"
+    "数据采集层包含 OhlcvPipeline、RealtimeQuotesPipeline 与 SymbolsPipeline，并通过 ParquetRepository 持久化，可由 tests/data 系列测试验证。",
+    "LLMStrategyGenerator、TradingOrchestrator、TradingSession 与 RiskPolicy 串联完成策略生成、下单执行与风控；run_full_automation 在满足回测指标后生成报表。"
   ],
-  "unknown": [],
-  "notes": "Phase C 主要疑问已关闭，后续关注点转向持续验证与文档同步。"
+  "unknown": [
+    "高优先级：scripts/run_full_pipeline.py 是否已经将数据同步→策略生成→受控交易→报表输出串联成默认自动流程？",
+    "高优先级：缺失 OPENAI_API_KEY 时自动化流程能否退化为离线策略或需要显式配置 fake completion？",
+    "中优先级：live 执行目前仅提供 MockBrokerClient，是否影响\"完成交易\"的需求边界，需要在 README 中明确说明？",
+    "中优先级：报表生成依赖的 Parquet 数据是否由 run_managed_trading_cycle 自动写入还是需要额外收集脚本？"
+  ],
+  "notes": "需进一步查阅脚本入口与配置默认值，确认 README 增补时对自动化流程与依赖进行说明。"
 }

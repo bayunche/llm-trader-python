@@ -1,103 +1,143 @@
 {
-  "scan_timestamp": "2025-11-03T23:23:48+08:00",
+  "scan_timestamp": "2025-11-04T09:29:54+08:00",
   "areas": [
     {
-      "name": "开发计划阶段状态",
+      "name": "行情数据采集与持久化",
       "locations": [
-        "开发计划.md",
-        ".codex/operations-log.md"
+        "src/llm_trader/data/pipelines/ohlcv.py",
+        "src/llm_trader/data/pipelines/realtime_quotes.py",
+        "src/llm_trader/api/utils.py"
       ],
-      "current_state": "Phase A 与 Phase B 均标记为已完成；2025-11-03 版本的计划现已完成 Phase C 全部子项（C1-C5），对应代码与测试已合并。",
+      "current_state": "OhlcvPipeline 通过 EastMoneyClient 抓取多频行情，执行缺失值/重复值清洗并写入 Parquet 仓储；RealtimeQuotesPipeline 获取实时快照并落盘；load_ohlcv 将历史数据按符号和频率汇总，供策略、回测与执行模块使用。",
       "similar_cases": [
-        "monitor.md",
-        "docs/monitoring.md"
+        "tests/data/test_ohlcv_pipeline.py",
+        "tests/data/test_realtime_quotes.py"
       ],
       "tech_stack": [
-        "Markdown",
-        "Poetry/pytest 工作流"
-      ],
-      "tests": [
-        "verification.md",
-        "tests/pipeline/test_full_pipeline.py"
-      ],
-      "notes": "需结合代码与测试进展确认 Phase C 剩余事项的实际实施程度。"
-    },
-    {
-      "name": "监控告警增强（Phase C1）",
-      "locations": [
-        "src/llm_trader/monitoring/alerts.py",
-        "scripts/run_full_pipeline.py",
-        "src/llm_trader/trading/manager.py",
-        "src/llm_trader/trading/alerts.py"
-      ],
-      "current_state": "AlertEmitter 支持 log/stdout/stderr 渠道；PipelineController 在预检、数据同步和自动交易失败场景写入阶段状态并发送告警；TradingManager 在风险策略拒绝时通过 TradingAlertService 触发“风控阻断”提示。",
-      "similar_cases": [
-        "tests/pipeline/test_full_pipeline.py",
-        "tests/trading/test_manager.py"
-      ],
-      "tech_stack": [
-        "Python 3.10",
-        "dataclasses",
-        "logging"
-      ],
-      "tests": [
-        "tests/pipeline/test_full_pipeline.py",
-        "tests/trading/test_manager.py"
-      ],
-      "notes": "实现与开发计划中 Phase C1 完成状态一致。"
-    },
-    {
-      "name": "数据质量回归集（Phase C2）",
-      "locations": [
-        "tests/data/regression/test_data_quality.py",
-        "src/llm_trader/data/repositories/parquet.py",
-        "data_store/"
-      ],
-      "current_state": "回归测试利用临时 Parquet 仓库校验标的、交易日历与订单分区结构，覆盖关键数据集字段和分区命名。",
-      "similar_cases": [
-        "tests/data/test_repositories.py"
-      ],
-      "tech_stack": [
+        "Python 3",
+        "pandas",
         "PyArrow",
-        "pytest",
-        "ParquetRepository"
+        "东方财富开放接口"
       ],
       "tests": [
-        "tests/data/regression/test_data_quality.py"
+        "tests/data/test_ohlcv_pipeline.py",
+        "tests/api/test_data.py"
       ],
-      "notes": "佐证开发计划中 Phase C2 已完成。"
+      "notes": "依赖网络访问东方财富接口并需要 DATA_STORE_DIR 指向本地数据仓储；若离线运行需事先准备缓存数据。"
     },
     {
-      "name": "仪表盘与性能优化（Phase C3-C5）",
+      "name": "标的候选集与实时筛选",
       "locations": [
-        "dashboard/app.py",
-        "docs/monitoring.md",
-        "tests/dashboard/test_data_access.py"
+        "src/llm_trader/data/pipelines/symbols.py",
+        "src/llm_trader/trading/orchestrator.py:_resolve_candidate_symbols",
+        "src/llm_trader/data/repositories/parquet.py"
       ],
-      "current_state": "仪表盘增加数据缓存与分页控制，提示词面板支持场景选择、版本历史与恢复；风控策略库新增波动率、行业集中度、持仓时长校验逻辑。",
+      "current_state": "SymbolsPipeline 周期性同步证券主表并写入仓储；TradingOrchestrator 在候选为空时回落到 ParquetRepository 列出的 active symbols，并可按 symbol_universe_limit 控制规模。",
       "similar_cases": [
-        "docs/monitoring.md",
+        "tests/data/test_symbols_pipeline.py",
+        "tests/trading/test_orchestrator.py"
+      ],
+      "tech_stack": [
+        "Python 3",
+        "pandas",
+        "dataclasses"
+      ],
+      "tests": [
+        "tests/data/test_symbols_pipeline.py",
+        "tests/trading/test_orchestrator.py"
+      ],
+      "notes": "缺少额外的基本面/因子过滤，需要结合风险策略或外部信号再筛选；首次运行需先完成 symbols 同步。"
+    },
+    {
+      "name": "大模型策略生成",
+      "locations": [
+        "src/llm_trader/strategy/llm_generator.py",
+        "src/llm_trader/trading/orchestrator.py",
         "src/llm_trader/strategy/prompts.py"
       ],
+      "current_state": "LLMStrategyGenerator 使用 PromptTemplateManager 拼接提示词并通过 OpenAI Chat Completions 返回 JSON 规则；orchestrator 组装行情摘要提供上下文，记录 last_prompt/last_raw_response 到 LLMStrategyLogRepository，并生成 RuleConfig 列表与 selected_symbols。",
+      "similar_cases": [
+        "tests/trading/test_orchestrator.py",
+        "tests/strategy/test_llm_generator.py"
+      ],
       "tech_stack": [
-        "Streamlit",
+        "OpenAI Chat Completions",
         "pandas",
-        "Altair"
+        "PromptTemplateManager"
       ],
       "tests": [
-        "tests/dashboard/test_data_access.py"
+        "tests/trading/test_orchestrator.py",
+        "tests/strategy/test_llm_generator.py",
+        "tests/strategy/test_prompts.py"
       ],
-      "notes": "相关测试 `tests/dashboard/test_data_access.py`、`tests/strategy/test_prompts.py`、`tests/trading/test_policy.py` 已覆盖新增能力。"
+      "notes": "生产运行需提供 OPENAI_API_KEY/可选 base_url；默认模型 gpt-4.1-mini，测试场景通过 fake completion 验证解析逻辑。"
+    },
+    {
+      "name": "交易执行与风险控制",
+      "locations": [
+        "src/llm_trader/trading/orchestrator.py",
+        "src/llm_trader/trading/session.py",
+        "src/llm_trader/trading/execution_adapters.py",
+        "src/llm_trader/trading/manager.py"
+      ],
+      "current_state": "orchestrator 根据策略信号构造订单并调用 TradingSession 执行；ExecutionAdapter 适配 sandbox/mock live 模式；TradingManager 的 run_managed_trading_cycle 结合 RiskPolicy 对权益曲线、持仓进行阈值判断，并在阻断时通过 TradingAlertService 告警。",
+      "similar_cases": [
+        "tests/trading/test_session.py",
+        "tests/trading/test_manager.py",
+        "tests/trading/test_live_adapter.py"
+      ],
+      "tech_stack": [
+        "dataclasses",
+        "pandas",
+        "自研撮合引擎 ExecutionEngine"
+      ],
+      "tests": [
+        "tests/trading/test_session.py",
+        "tests/trading/test_manager.py",
+        "tests/pipeline/test_auto.py"
+      ],
+      "notes": "live 执行当前仅提供 MockBrokerClient；如需真实券商接入需扩展 BrokerClient 实现与配置。"
+    },
+    {
+      "name": "回测与报表生成",
+      "locations": [
+        "src/llm_trader/pipeline/auto.py",
+        "src/llm_trader/reports/builder.py",
+        "src/llm_trader/reports/writer.py",
+        "src/llm_trader/reports/loader.py"
+      ],
+      "current_state": "run_full_automation 执行 run_ai_trading_cycle 后可选触发 BacktestRunner 校验策略指标，满足 BacktestCriteria 才继续 run_managed_trading_cycle；load_report_payload/ReportBuilder/ReportWriter 组合生成多格式报表并与 LLM 日志关联。",
+      "similar_cases": [
+        "tests/pipeline/test_auto.py",
+        "tests/reports/test_builder.py"
+      ],
+      "tech_stack": [
+        "pandas",
+        "dataclasses",
+        "PyArrow",
+        "BacktestRunner"
+      ],
+      "tests": [
+        "tests/pipeline/test_auto.py",
+        "tests/pipeline/test_full_pipeline.py",
+        "tests/reports/test_builder.py"
+      ],
+      "notes": "报表生成依赖交易会话 Parquet 记录；若 run_managed_trading_cycle 风控阻断或缺少交易记录会返回 None。"
     }
   ],
   "observation_report": {
     "anomalies": [
-      "sequential-thinking MCP 工具在当前环境缺失，只能以人工方式记录思考过程，已在操作日志中说明。"
+      "live 模式仍使用 mock 券商客户端，真实券商执行尚未落地。"
     ],
-    "information_gaps": [],
-    "suggested_deep_dives": [],
+    "information_gaps": [
+      "需确认生产部署时的数据采集调度与凭证管理流程，目前仓库侧未提供自动化脚本。"
+    ],
+    "suggested_deep_dives": [
+      "验证 scripts/run_full_pipeline.py 是否已串联上述模块并检查依赖兼容性。"
+    ],
     "tool_notes": {
-      "code_index": "未提供对应 MCP 工具，继续采用 shell/rg 方式检索并在日志中留痕。"
+      "code_index": "项目未配置 code-index MCP，已改用 shell/rg 检索并同步记录操作日志。",
+      "sequential_thinking": "MCP 工具可用，已在任务起始阶段调用。"
     }
   }
 }

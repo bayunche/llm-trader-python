@@ -1,91 +1,102 @@
-# A股自动交易代理项目
+# LLM Trader · A 股大模型自动交易框架
 
-> **执行者：Codex** ｜ **更新时间：2025-11-03**  
-> 当前版本已实现“数据采集 → 策略生成 → 自动交易 → 报表 → 仪表盘”单轮自动化，并提供状态文件供 Dashboard 展示整体执行情况。
+> **执行者：Codex** ｜ **最后更新：2025-11-04**  
+> 面向数据驱动的量化团队，提供“行情采集 → 策略生成 → 风险控制 → 执行复盘 → 仪表盘”一站式流水线。
 
----
-
-## 当前能力概览
-
-- **数据获取与存储**：`src/llm_trader/data/pipelines` 提供东方财富证券主表、交易日历、K线与实时行情同步，统一落地 `ParquetRepository`（`src/llm_trader/data/repositories/parquet.py`）。
-- **大模型策略生成**：`LLMStrategyGenerator`（`src/llm_trader/strategy/llm_generator.py`）基于 OpenAI Chat Completions 输出策略规则与 `selected_symbols`，并在 `LLMStrategyLogRepository` 中留痕。
-- **模拟交易执行**：`run_ai_trading_cycle`（`src/llm_trader/trading/orchestrator.py`）将实时行情、LLM 策略与历史数据结合，通过 `TradingSession` 复用回测撮合引擎，实现下单与账户记录。
-- **自动化流水线**：`run_full_automation`（`src/llm_trader/pipeline/auto.py`）串联策略生成、历史回测、风险评估，便于构建全自动模拟流程。
-- **调度与可视化**：`scripts/run_scheduler.py` 结合 APScheduler 执行数据/交易作业，`dashboard/app.py` 基于 Streamlit 展示资金曲线、订单、成交及 LLM 日志，支持场景化提示词模板、版本历史与一键恢复。
-- **执行模式切换**：通过 `.env` 中的 `TRADING_EXECUTION_MODE` 和券商配置自动选择沙盒或实盘适配器；默认提供 mock 券商实现便于模拟 live 流程。
-- **报表生成**：`llm_trader.reports` 支持将交易结果导出为 CSV/Markdown/JSON，自动化流程与 Docker 启动时会自动生成。
-- **风控与告警**：`RiskPolicy` 支持最大回撤、权益波动率、单标仓位、行业集中度、持仓时间等阈值；`PipelineController`、`run_managed_trading_cycle` 在异常时触发告警并写入状态文件。
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](#-快速开始) 
+[![LLM](https://img.shields.io/badge/LLM-OpenAI%20API-blueviolet?logo=openai)](#-大模型策略设定) 
+[![Tests](https://img.shields.io/badge/Tests-pytest-green?logo=pytest)](#-质量保证) 
+[![Status](https://img.shields.io/badge/Status-Internal-orange)](#-社区与支持)
 
 ---
 
-## 已知限制与规划中的变更
+## 📌 快速索引
 
-- **!!! 实盘执行尚不可用**：`TRADING_EXECUTION_MODE` 默认 `sandbox`，`live` 模式仍为占位实现，会在预检阶段直接阻断执行并给出警示，切勿在生产环境启用。
-- **Docker 一键流程已上线**：`docker compose up` 会自动执行数据同步→策略生成→交易执行→报表生成→Dashboard 启动，并将状态写入 `REPORT_OUTPUT_DIR/status.json`。
-- **外部依赖**：大模型调用需具备 OpenAI 兼容接口与 API Key；行情数据依赖东方财富公开端点（请遵守频控与条款）。
-- **数据初始化**：首次运行必须先完成证券主表、行情等基础数据同步，否则自动化流程会因缺少数据而终止。
+- [项目亮点](#-项目亮点)
+- [架构总览](#-架构总览)
+- [快速开始](#-快速开始)
+- [使用指南](#-使用指南)
+- [自动化交易全流程](#-自动化交易全流程)
+- [配置项速查](#-配置项速查)
+- [质量保证](#-质量保证)
+- [路线图](#-路线图)
+- [参与贡献](#-参与贡献)
+- [社区与支持](#-社区与支持)
+- [许可证](#-许可证)
 
 ---
 
-## 快速开始
+## ✨ 项目亮点
+
+- **全链路闭环**：内置 `scripts/run_full_pipeline.py`，实现行情同步、LLM 策略生成、风险评估、交易执行、报表输出的自动化。
+- **大模型驱动策略**：`LLMStrategyGenerator` 使用 OpenAI Chat Completions 生成规则与标的，支持多场景提示词模板及日志追溯。
+- **真实行情接入**：`OhlcvPipeline`、`RealtimeQuotesPipeline` 对接东方财富公开接口，结合 `ParquetRepository` 管理本地数据湖。
+- **风险可控执行**：`run_managed_trading_cycle` 复用回测撮合引擎，结合 `RiskPolicy` 的回撤、波动、行业集中度等阈值做风控决策。
+- **多格式报表**：`ReportBuilder` + `ReportWriter` 输出 CSV、Markdown、JSON，仪表盘可直接展示 LLM 日志、资金曲线与交易明细。
+- **DevOps 友好**：Poetry/Conda 互通，Docker Compose 一键带起数据同步、策略执行、Dashboard。
+
+---
+
+## 🧱 架构总览
+
+| 层级 | 职责 | 关键位置 |
+| --- | --- | --- |
+| 数据采集 | 东方财富证券主表、行情、实时快照同步与清洗 | `src/llm_trader/data/pipelines/`, `src/llm_trader/data/repositories/parquet.py` |
+| 策略生成 | Prompt 模板管理 + LLM 规则解析 | `src/llm_trader/strategy/llm_generator.py`, `src/llm_trader/strategy/prompts.py` |
+| 交易执行 | 实时行情摘要、订单生成、撮合记录 | `src/llm_trader/trading/orchestrator.py`, `src/llm_trader/trading/session.py` |
+| 风控管理 | 账户权益监控、告警、行业风险约束 | `src/llm_trader/trading/manager.py`, `src/llm_trader/trading/policy.py` |
+| 报表与可视化 | 报表管道 + Streamlit 仪表盘 | `src/llm_trader/reports/`, `dashboard/app.py` |
+| 自动化管道 | 回测验证、受控执行与状态跟踪 | `src/llm_trader/pipeline/auto.py`, `scripts/run_full_pipeline.py` |
+
+> 更多背景文档请访问 `docs/`：包括数据仓储 (`docs/data_store.md`)、风控 (`docs/risk_management.md`)、实时行情 (`docs/realtime_data.md`) 等。
+
+---
+
+## 🚀 快速开始
+
+### 环境准备
 
 ```bash
-# 安装依赖（Poetry）
+# 使用 Poetry
 poetry install
-
-# 激活虚拟环境
 poetry shell
 
-# 运行测试（当前覆盖模拟与数据模块）
-poetry run pytest
-```
-
-若使用 Conda：
-
-```bash
+# 或使用 Conda
 conda create -n llm-trader python=3.10
 conda run -n llm-trader python -m pip install -r requirements.dev.txt
-conda run -n llm-trader env PYTHONPATH=src python -m pytest
 ```
 
-### 数据初始化示例
+### 基础验证
+
+```bash
+env PYTHONPATH=src python -m pytest
+```
+
+### 必备配置
+
+- 复制 `.env.example` → `.env`
+- 填写 `OPENAI_API_KEY`（或兼容接口凭证）
+- 确保 `DATA_STORE_DIR` 指向读写权限目录
+- 推荐保持 `TRADING_EXECUTION_MODE=sandbox`
+
+---
+
+## 🛠 使用指南
+
+### 1. 数据准备
 
 ```bash
 # 同步证券主表
 python -m llm_trader.data.pipelines.symbols
 
-# 同步日线行情（示例）
+# 同步行情（示例）
 python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
 ```
 
-确保 `.env` 中填入：
+首轮运行请先完成证券主表与历史行情同步，否则自动化流程会直接阻断。
 
-- `OPENAI_API_KEY` 或兼容接口凭证；
-- `TRADING_EXECUTION_MODE=sandbox`（默认；`live` 当前仅会抛出“未接入券商”提示，禁止启用）；
-- `REPORT_OUTPUT_DIR`（报表与状态导出目录，默认 `reports`，请与宿主机挂载保持一致）；
-- 可选：`PIPELINE_STATUS_FILENAME`（默认 `status.json`），用于指定状态文件名称。
-- 若需模拟 live 流程，可设置 `TRADING_EXECUTION_MODE=live`，并配置 `TRADING_BROKER_PROVIDER`（默认为 `mock`）、`TRADING_BROKER_ACCOUNT` 等参数；接入真实券商时请替换 provider 并补充 `TRADING_BROKER_BASE_URL`、`TRADING_BROKER_API_KEY`。
-- `MONITORING_ALERT_CHANNEL`（默认 `log`），用于选择告警输出渠道（`log`/`stdout`/`stderr`）。
+### 2. 单次 AI 交易循环（沙盒）
 
----
-
-## 关键模块速览
-
-| 模块 | 说明 | 主要文件 | 关联测试 |
-| --- | --- | --- | --- |
-| 数据采集 | 东方财富数据抓取、落地与质量校验 | `src/llm_trader/data/pipelines/`, `src/llm_trader/data/repositories/parquet.py` | `tests/data/` |
-| 策略生成 | LLM 提示构建、返回解析、规则封装 | `src/llm_trader/strategy/llm_generator.py`, `src/llm_trader/strategy/engine.py` | `tests/strategy/` |
-| 交易执行 | LLM 建议→订单→执行（沙盒/占位实盘）→仓位记录 | `src/llm_trader/trading/orchestrator.py`, `src/llm_trader/trading/session.py`, `src/llm_trader/trading/execution_adapters.py` | `tests/trading/` |
-| 自动化流水线 | 策略生成→回测→风控→报表生成 | `src/llm_trader/pipeline/auto.py` | `tests/pipeline/test_auto.py`, `tests/reports/test_builder.py` |
-| 报表体系 | 数据加载、指标构建、文件写出 | `src/llm_trader/reports/*`, `scripts/generate_report.py` | `tests/reports/test_builder.py` |
-| 调度与监控 | APScheduler 配置、告警、排程脚本 | `src/llm_trader/scheduler/`, `scripts/run_scheduler.py` | `tests/scheduler/` |
-| 可视化 | Streamlit 仪表盘、LLM 日志辅助诊断 | `dashboard/app.py`, `dashboard/data.py` | `tests/dashboard/` |
-
----
-
-## 使用示例
-
-### 运行一次 AI 交易循环（模拟）
 ```bash
 python scripts/run_ai_trading_cycle.py \
   --session demo-session \
@@ -93,61 +104,110 @@ python scripts/run_ai_trading_cycle.py \
   --symbols 600000.SH 000001.SZ \
   --objective "获取稳健收益"
 ```
-- 通过 LLM 生成规则与最终标的；
-- 调用本地撮合引擎执行；
-- 结果写入 `data_store/` 并在仪表盘中可视化。
 
-### 启动全自动流水线
-```bash
-python -m llm_trader.pipeline.auto \
-  --session demo-session \
-  --strategy demo-strategy \
-  --symbols 600000.SH \
-  --backtest-start 2024-01-01 \
-  --backtest-end 2024-03-01
-```
-- 自动执行策略生成、历史回测、风控决策；
-- 若回测指标未达标，流程在风控前终止。
+- 大模型生成策略规则与 `selected_symbols`  
+- 复用本地撮合执行，结果写入 `data_store/`
 
-### 启动仪表盘与一键流程
+### 3. 启动仪表盘
+
 ```bash
 conda run -n llm-trader streamlit run dashboard/app.py
 ```
-- 访问 `http://localhost:8501` 查看资金曲线、订单、成交和 LLM 策略日志；
-- 支持多策略/多会话对比以及 LLM 辅助问答。
 
-> 生产环境可直接运行 `docker compose up`（或 `./start.sh up`）。容器内的入口脚本会执行新的管线控制器，将阶段结果写入 `${REPORT_OUTPUT_DIR}/${PIPELINE_STATUS_FILENAME}`，即使流程失败也会继续启动 Dashboard 并在页面顶部展示状态。
+访问 `http://localhost:8501`，查看资金曲线、成交明细、LLM 日志、提示词版本管理等。
 
-### 健康检查
+### 4. Docker 一键流程
 
+```bash
+docker compose up --build
 ```
-env PYTHONPATH=src python scripts/healthcheck.py
-```
-- 检查最新状态文件是否存在且所有阶段均成功；
-- 校验策略提示词模板占位符完整；
-- 返回 0 代表健康，否则打印原因并返回非零退出码。
+
+容器内入口脚本会执行完整流水线并启动 Dashboard。阶段状态持续写入 `${REPORT_OUTPUT_DIR}/status.json`。
 
 ---
 
-## 路线图（下一阶段重点）
+## 🔄 自动化交易全流程
+
+| 阶段 | 说明 | 关键实现 | 测试 |
+| --- | --- | --- | --- |
+| 行情采集 | 东方财富 K 线、实时行情采集与落地 | `src/llm_trader/data/pipelines/ohlcv.py`, `src/llm_trader/data/pipelines/realtime_quotes.py` | `tests/data/test_ohlcv_pipeline.py`, `tests/data/test_realtime_quotes.py` |
+| 候选标的 | 周期同步证券主表，生成候选列表 | `src/llm_trader/data/pipelines/symbols.py`, `_resolve_candidate_symbols` | `tests/data/test_symbols_pipeline.py`, `tests/trading/test_orchestrator.py` |
+| 大模型策略 | Prompt 模板 → OpenAI → 规则解析与日志 | `src/llm_trader/strategy/llm_generator.py`, `src/llm_trader/strategy/prompts.py` | `tests/strategy/test_llm_generator.py`, `tests/strategy/test_prompts.py` |
+| 交易执行 | 订单生成、撮合、账户快照 | `src/llm_trader/trading/orchestrator.py`, `src/llm_trader/trading/session.py` | `tests/trading/test_session.py`, `tests/trading/test_orchestrator.py` |
+| 风险控制 | 回撤、仓位、行业集中度等阈值评估与告警 | `src/llm_trader/trading/manager.py`, `src/llm_trader/trading/policy.py` | `tests/trading/test_manager.py`, `tests/trading/test_policy.py` |
+| 回测验收 | `BacktestRunner` 校验策略表现 | `src/llm_trader/pipeline/auto.py` | `tests/pipeline/test_auto.py`, `tests/pipeline/test_full_pipeline.py` |
+| 报表输出 | 生成 CSV/Markdown/JSON + LLM 日志 | `src/llm_trader/reports/` | `tests/reports/test_builder.py` |
+| 状态追踪 | `PipelineController` 写入阶段状态与告警 | `scripts/run_full_pipeline.py` | 冒烟测试脚本 |
+
+---
+
+## ⚙️ 配置项速查
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 调用大模型所需凭证 | 无（必填） |
+| `TRADING_EXECUTION_MODE` | `sandbox` / `live`，live 目前为 mock 实现 | `sandbox` |
+| `TRADING_SYMBOLS` | 默认候选标的列表 | 空 |
+| `TRADING_LOOKBACK_DAYS` | 自动化回测历史窗口天数 | `120` |
+| `TRADING_REPORT_OUTPUT_DIR` | 报表及状态文件输出目录 | `reports` |
+| `DATA_STORE_DIR` | Parquet 数据仓储根目录 | `data_store` |
+| `MONITORING_ALERT_CHANNEL` | 告警输出渠道 `log`/`stdout`/`stderr` | `log` |
+
+更多配置可在 `config/settings.py` 中查阅，支持 `.env` / 环境变量覆盖。
+
+---
+
+## ✅ 质量保证
+
+- 统一使用 `env PYTHONPATH=src python -m pytest` 运行测试
+- 重点回归：`tests/data/regression/test_data_quality.py`、`tests/trading/test_manager.py`
+- 文档与验证记录：`verification.md`、`.codex/testing.md`
+- Health Check：`env PYTHONPATH=src python scripts/healthcheck.py`
+
+---
+
+## 🗺 路线图
 
 | 优先级 | 事项 | 目标 |
 | --- | --- | --- |
-| P0 | 接入真实券商执行适配器 | 在 `live` 模式下完成真实下单、资金同步与异常回滚，替换当前 mock 实现。 |
-| P1 | 扩展风控指标生态 | 引入资金曲线 VaR、敞口黑名单、日内波动限额等配置化指标，与现有阈值协同。 |
-| P1 | 多账户/多策略提示词治理 | 为多个账户维护独立模板仓库、审批流程与版本审计，增强合规可追溯性。 |
-| P2 | Docker 周期化管道 | 在单容器环境内实现多轮执行/恢复能力，提供作业状态 API 与重试策略。 |
-| P2 | 数据资产回溯 | 构建行情/报表归档与落差检测机制，补齐历史数据断档提醒。 |
+| P0 | 接入真实券商执行适配器 | 为 `live` 模式提供真实下单、资金同步与回滚能力 |
+| P1 | 扩展风控指标生态 | 引入 VaR、敞口黑名单、日内波动限额等可配置指标 |
+| P1 | 多账户/多策略提示词治理 | 独立模板仓库、审批流程与版本审计 |
+| P2 | Docker 周期化管道 | 单容器内提供多轮执行与恢复策略 |
+| P2 | 数据资产回溯 | 行情/报表归档与断档检测机制 |
 
-路线图对应的开发任务会同步体现在《开发计划.md》中，欢迎按需调整优先级。
+路线图详情与优先级调整记录于《开发计划.md》。
 
 ---
 
-## 贡献与验证
+## 🤝 参与贡献
 
-- 所有改动需同步更新 `.codex/operations-log.md`、`verification.md`；
-- 测试统一使用 `env PYTHONPATH=src python -m pytest`；
-- 文档更新请注明日期与执行者身份。
-- 建议定期运行 `env PYTHONPATH=src python3 -m pytest tests/data/regression/test_data_quality.py` 与 `env PYTHONPATH=src python3 -m pytest tests/trading/test_manager.py` 验证数据与告警改造。
+1. Fork & 拉取子分支，保持小步提交，Commit message 使用祈使句。  
+2. 修改前同步更新 `.codex/operations-log.md`、`verification.md`。  
+3. 提交 PR 时请包含：变更摘要、测试命令/日志、关联任务。  
+4. 文档更新需注明日期与执行者身份。  
+5. 贡献者需遵循现有代码风格（PEP 8、中文注释、路径引用）。
 
-如需进一步需求沟通或接入新功能，请先更新《项目需求.md》与《开发计划.md》，保持文档与实现一致。
+> 若需新增模块，请先在《项目需求.md》与《开发计划.md》登记，确保文档与实现同步。
+
+---
+
+## 🧭 社区与支持
+
+- 📚 文档：`docs/` 目录（数据存储、风控、调度、策略等）  
+- 🧪 测试：`tests/` 下按模块划分的单元/集成测试  
+- 🛠 工具：`scripts/` 提供数据同步、策略执行、报表生成脚本  
+- ❓ 问题反馈：当前仅限内部 Issue / Scrum 频道
+
+如需规划新特性，请在《项目需求.md》提交条目，或联系维护者。
+
+---
+
+## 📄 许可证
+
+> **当前未公开对外许可证**，代码仅供内部评估与试运行，禁止传播或商用。  
+后续若对外开源，将补充正式 License 文件并更新本说明。
+
+---
+
+感谢关注 LLM Trader！欢迎在 Dashboard 与报告中探索大模型驱动的量化交易新范式。 ✨

@@ -1,0 +1,30 @@
+{
+  "question": "scripts/run_full_pipeline.py 是否已经将数据同步、策略生成、交易执行与报表生成串联成默认自动化流程？",
+  "priority": "high",
+  "reason": "确认是否存在现成入口脚本，决定 README 中对全链路能力的描述方式。",
+  "investigation_timestamp": "2025-11-04T09:32:40+08:00",
+  "findings": [
+    {
+      "evidence": "PipelineController.run 依次执行预检、数据同步与自动交易阶段，直接调用 _sync_data 与 run_full_automation。",
+      "paths": [
+        "scripts/run_full_pipeline.py:79",
+        "scripts/run_full_pipeline.py:115"
+      ]
+    },
+    {
+      "evidence": "_sync_data 调用 SymbolsPipeline.sync 与 RealtimeQuotesPipeline.sync 拉取证券主表和实时行情，确保策略阶段有候选标的与行情快照。",
+      "paths": [
+        "scripts/run_full_pipeline.py:26",
+        "scripts/run_full_pipeline.py:33"
+      ]
+    },
+    {
+      "evidence": "_record_report_stage 在自动交易完成后根据 AutoTradingResult.report_paths 写出报表阶段状态，若无报表则记录提醒。",
+      "paths": [
+        "scripts/run_full_pipeline.py:164",
+        "scripts/run_full_pipeline.py:173"
+      ]
+    }
+  ],
+  "conclusion": "该脚本已将数据同步、策略执行、风险控制（run_full_automation 内部调用）与报表写入串联，形成默认的一键自动化入口。"
+}
