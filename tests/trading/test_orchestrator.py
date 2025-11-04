@@ -34,10 +34,12 @@ class FakeGenerator:
         )
         self.last_prompt = None
         self.last_raw_response = None
+        self.last_context = None
 
-    def generate(self, _context) -> LLMStrategySuggestion:
+    def generate(self, context) -> LLMStrategySuggestion:
         self.last_prompt = "fake prompt"
         self.last_raw_response = json.dumps({"description": "demo", "rules": []})
+        self.last_context = context
         return self._suggestion
 
 
@@ -46,7 +48,10 @@ class FakeRealtimePipeline:
         self._quotes = quotes
 
     def sync(self, symbols: Sequence[str]) -> List[Dict[str, object]]:
-        return [quote for quote in self._quotes if quote["symbol"] in symbols]
+        if symbols is None:
+            return list(self._quotes)
+        target = set(symbols)
+        return [quote for quote in self._quotes if quote["symbol"] in target]
 
 
 def _load_bars(_: Sequence[str], __: str, ___, ____):
@@ -240,3 +245,90 @@ def test_run_ai_trading_cycle_live_mode_raises(tmp_path: Path) -> None:
             realtime_pipeline=realtime,
             load_ohlcv_fn=fake_load,
         )
+
+
+def test_auto_selects_top_symbols(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base_dir = tmp_path / "data_store"
+    manager = default_manager(base_dir=base_dir)
+    repo = ParquetRepository(manager=manager)
+
+    history = [
+        {
+            "symbol": "600001.SH",
+            "dt": datetime(2024, 1, 1, 9, 30),
+            "freq": "D",
+            "open": 10.0,
+            "high": 10.5,
+            "low": 9.8,
+            "close": 10.3,
+            "volume": 200000,
+            "amount": 2000000,
+        }
+    ]
+
+    def fake_load(symbols, freq, start, end):
+        assert symbols == ["600001.SH"]
+        return history
+
+    generator = FakeGenerator(
+        [
+            RuleConfig(
+                indicator="sma",
+                column="close",
+                params={"window": 1},
+                operator=">",
+                threshold=9.0,
+            )
+        ]
+    )
+    generator._suggestion.selected_symbols = ["600001.SH"]
+    realtime = FakeRealtimePipeline(
+        [
+            {
+                "symbol": "600001.SH",
+                "last_price": 10.5,
+                "amount": 2_000_000,
+                "turnover_rate": 4.0,
+            },
+            {
+                "symbol": "600002.SH",
+                "last_price": 8.0,
+                "amount": 1_500_000,
+                "turnover_rate": 3.0,
+            },
+            {
+                "symbol": "600003.SH",
+                "last_price": 5.0,
+                "amount": 500_000,
+                "turnover_rate": 2.0,
+            },
+        ]
+    )
+
+    session = TradingSession(
+        TradingSessionConfig(session_id="session-auto", strategy_id="strategy-auto", initial_cash=100000.0),
+        repository=repo,
+    )
+
+    config = TradingCycleConfig(
+        session_id="session-auto",
+        strategy_id="strategy-auto",
+        symbols=[],
+        objective="获取稳健收益",
+        indicators=("sma",),
+        history_start=datetime(2024, 1, 1),
+        symbol_universe_limit=2,
+        selection_metric="amount",
+    )
+
+    result = run_ai_trading_cycle(
+        config,
+        generator=generator,
+        trading_session=session,
+        realtime_pipeline=realtime,
+        load_ohlcv_fn=fake_load,
+    )
+
+    assert result["selected_symbols"] == ["600001.SH"]
+    assert generator.last_context is not None
+    assert generator.last_context.symbols[:2] == ["600001.SH", "600002.SH"]

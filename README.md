@@ -30,9 +30,10 @@
 
 - **全链路闭环**：内置 `scripts/run_full_pipeline.py`，实现行情同步、LLM 策略生成、风险评估、交易执行、报表输出的自动化。
 - **大模型驱动策略**：`LLMStrategyGenerator` 使用 OpenAI Chat Completions 生成规则与标的，支持多场景提示词模板及日志追溯。
-- **真实行情接入**：`OhlcvPipeline`、`RealtimeQuotesPipeline` 对接东方财富公开接口，结合 `ParquetRepository` 管理本地数据湖。
+- **真实行情接入**：`OhlcvPipeline`、`RealtimeQuotesPipeline` 默认对接东方财富公开接口，并在证券主表采集阶段自动尝试多个 push2 子域；若外部接口不可用，会降级使用上交所/深交所官方公开数据，确保流程不中断。所有数据统一落地 `ParquetRepository`。
+- **自动选股**：无需手动维护候选列表，系统会在全 A 股范围内按成交额/换手率等指标排序，选取前 `symbol_universe_limit` 个标的传递给大模型评估，可通过 `TRADING_SELECTION_METRIC` 自定义指标。
 - **风险可控执行**：`run_managed_trading_cycle` 复用回测撮合引擎，结合 `RiskPolicy` 的回撤、波动、行业集中度等阈值做风控决策。
-- **多格式报表**：`ReportBuilder` + `ReportWriter` 输出 CSV、Markdown、JSON，仪表盘可直接展示 LLM 日志、资金曲线与交易明细。
+- **多格式报表与可视化**：`ReportBuilder` + `ReportWriter` 输出 CSV、Markdown、JSON，Streamlit 仪表盘支持实时交易看板、成交分布/趋势图、资金曲线对比及 LLM 日志浏览。
 - **DevOps 友好**：Poetry/Conda 互通，Docker Compose 一键带起数据同步、策略执行、Dashboard。
 
 ---
@@ -95,7 +96,29 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
 
 首轮运行请先完成证券主表与历史行情同步，否则自动化流程会直接阻断。
 
-### 2. 单次 AI 交易循环（沙盒）
+### 2. 全流程自动化（本地运行）
+
+1. 确认 `.env` 中已配置以下核心项（可参考 `.env.example`）：  
+   `TRADING_SESSION`, `TRADING_STRATEGY`, `TRADING_SYMBOLS`, `TRADING_OBJECTIVE`, `TRADING_FREQ`, `TRADING_LOOKBACK_DAYS`、`OPENAI_API_KEY` 等。  
+   默认报表目录由 `TRADING_REPORT_OUTPUT_DIR` 控制（缺省为 `reports/`）。
+2. 运行自动化脚本：
+
+   ```bash
+   env PYTHONPATH=src python scripts/run_full_pipeline.py
+   ```
+
+   该脚本会依次执行 **证券主表 & 实时/历史行情同步 → LLM 策略生成 → 回测验收 → 风控执行 → 报表写入**，并将阶段结果写入 `${REPORT_OUTPUT_DIR}/status.json`。证券主表步骤会先尝试东方财富多域名接口，若均失败则自动切换至上交所/深交所公开数据；实时行情同步后会自动按 `TRADING_SELECTION_METRIC`（默认 `amount`）排序选出前 `TRADING_SYMBOL_UNIVERSE_LIMIT` 个标的传递给大模型。
+   首次运行若网络受限仍建议预先拉取关键标的，脚本会在缺失时自动补齐指定窗口。
+3. 产出的报表与 LLM 日志位于 `${REPORT_OUTPUT_DIR}/<strategy>/<session>/<timestamp>/`，可在仪表盘实时看板与图表模块中查看。
+4. 若需定时轮询，可使用调度器：
+
+   ```bash
+   env PYTHONPATH=src python scripts/run_scheduler.py config/scheduler.prod.json
+   ```
+
+   配置文件可自定义作业、频率与管道组合。
+
+### 3. 单次 AI 交易循环（沙盒）
 
 ```bash
 python scripts/run_ai_trading_cycle.py \
@@ -108,18 +131,18 @@ python scripts/run_ai_trading_cycle.py \
 - 大模型生成策略规则与 `selected_symbols`  
 - 复用本地撮合执行，结果写入 `data_store/`
 
-### 3. 启动仪表盘
+### 4. 启动仪表盘
 
 ```bash
 conda run -n llm-trader streamlit run dashboard/app.py
 ```
 
-访问 `http://localhost:8501`，查看资金曲线、成交明细、LLM 日志、提示词版本管理等。
+访问 `http://localhost:8501`，查看实时交易看板、成交分布/趋势图、资金曲线对比、订单/成交流水以及提示词管理等。
 
-### 4. Docker 一键流程
+### 5. Docker 一键流程
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.prod.yml up --build
 ```
 
 容器内入口脚本会执行完整流水线并启动 Dashboard。阶段状态持续写入 `${REPORT_OUTPUT_DIR}/status.json`。
@@ -147,7 +170,9 @@ docker compose up --build
 | --- | --- | --- |
 | `OPENAI_API_KEY` | 调用大模型所需凭证 | 无（必填） |
 | `TRADING_EXECUTION_MODE` | `sandbox` / `live`，live 目前为 mock 实现 | `sandbox` |
-| `TRADING_SYMBOLS` | 默认候选标的列表 | 空 |
+| `TRADING_SYMBOLS` | 默认候选标的（留空则自动选股） | 空 |
+| `TRADING_SYMBOL_UNIVERSE_LIMIT` | 自动选股时的最大候选数量 | `200` |
+| `TRADING_SELECTION_METRIC` | 自动选股指标（`amount`/`volume`/`turnover_rate` 等） | `amount` |
 | `TRADING_LOOKBACK_DAYS` | 自动化回测历史窗口天数 | `120` |
 | `TRADING_REPORT_OUTPUT_DIR` | 报表及状态文件输出目录 | `reports` |
 | `DATA_STORE_DIR` | Parquet 数据仓储根目录 | `data_store` |

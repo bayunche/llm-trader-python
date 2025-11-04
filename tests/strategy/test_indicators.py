@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from llm_trader.strategy.library.indicators import ema, momentum, sma, volatility
+from llm_trader.strategy.library.indicators import ema, momentum, rsi, sma, volatility
 
 
 def test_sma_basic() -> None:
@@ -29,3 +29,10 @@ def test_volatility() -> None:
     series = pd.Series([10, 10.5, 11, 10.8, 10.6])
     result = volatility(series, window=2)
     assert result.iloc[-1] >= 0
+
+
+def test_rsi_range() -> None:
+    series = pd.Series([10, 11, 9, 12, 10, 13, 11])
+    result = rsi(series, window=3)
+    tail = result.dropna().iloc[-1]
+    assert 0 <= tail <= 100

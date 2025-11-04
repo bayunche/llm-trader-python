@@ -44,6 +44,23 @@ def volume_ratio(volume: pd.Series, window: int) -> pd.Series:
     return volume / volume.rolling(window=window, min_periods=window).mean()
 
 
+def rsi(series: pd.Series, window: int) -> pd.Series:
+    """相对强弱指标（Relative Strength Index）。"""
+
+    if window <= 0:
+        raise ValueError("窗口长度必须大于 0")
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=window, min_periods=window).mean()
+    avg_loss = loss.rolling(window=window, min_periods=window).mean()
+    rs = avg_gain / avg_loss.replace(to_replace=0, value=pd.NA)
+    rsi_series = 100 - (100 / (1 + rs))
+    rsi_series = rsi_series.fillna(100)
+    rsi_series = rsi_series.fillna(0)
+    return rsi_series
+
+
 INDICATOR_REGISTRY: Dict[str, Callable[..., pd.Series]] = {
     "sma": sma,
     "ema": ema,
@@ -51,6 +68,7 @@ INDICATOR_REGISTRY: Dict[str, Callable[..., pd.Series]] = {
     "roc": rate_of_change,
     "volatility": volatility,
     "volume_ratio": volume_ratio,
+    "rsi": rsi,
 }
 
 

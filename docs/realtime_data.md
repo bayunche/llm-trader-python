@@ -38,6 +38,7 @@ python scripts/run_realtime_scheduler.py --interval 1
 
 - 单次请求最多 50 个证券，管道内部已自动切分；如需更大规模抓取，可多进程/多任务配置。
 - 未显式指定标的时，实时行情管道会根据证券主表自动构建标的池，需确保已执行 `SymbolsPipeline.sync()`。
+- 默认自动选股会使用实时行情数据按 `TRADING_SELECTION_METRIC`（成交额/成交量/换手率等）排序，截取前 `TRADING_SYMBOL_UNIVERSE_LIMIT` 个标的传给大模型；若设置了 `TRADING_SYMBOLS`，则使用用户指定列表。
 - 接口存在速率限制，建议结合阶段 8 的监控与限流配置使用。
 - 落盘文件按日期追加，可配合 BI/Streamlit 仪表盘进行实时展示。
 - 若需与大模型策略生成联动，可结合 `StrategyRepository` 自动登记最新信号。

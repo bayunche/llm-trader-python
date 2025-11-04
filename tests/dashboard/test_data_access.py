@@ -95,6 +95,10 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     strategies = data.list_strategy_ids()
     sessions = data.list_strategy_sessions()
     versions = data.list_strategy_versions("strategy-ai")
+    recent_trades = data.get_recent_trades(limit=5)
+    recent_orders = data.get_recent_orders(limit=5)
+    agg = data.aggregate_trades_by_symbol(limit=10)
+    ts = data.trades_time_series()
 
     assert orders[0]["order_id"] == "o-1"
     assert trades[0]["trade_id"] == "t-1"
@@ -107,6 +111,10 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     assert data.count_trades("strategy-ai", "session-1") == 1
     assert data.count_equity_points("strategy-ai", "session-1") >= 1
     assert data.count_llm_logs("strategy-ai", "session-1") == 1
+    assert recent_trades and recent_trades[0]["strategy_id"] == "strategy-ai"
+    assert recent_orders and recent_orders[0]["strategy_id"] == "strategy-ai"
+    assert not agg.empty and "amount" in agg.columns
+    assert not ts.empty and "timestamp" in ts.columns
 
 
 def test_load_pipeline_status_success(tmp_path, monkeypatch) -> None:

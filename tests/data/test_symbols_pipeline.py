@@ -18,7 +18,7 @@ from llm_trader.data.repositories.parquet import ParquetRepository
 def test_symbols_pipeline_sync(tmp_path: Path) -> None:
     """应正确下载并写入证券主表数据。"""
 
-    route = respx.get("https://80.push2.eastmoney.com/api/qt/clist/get").mock(
+    primary_route = respx.get("https://push2.eastmoney.com/api/qt/clist/get").mock(
         return_value=Response(
             200,
             json={
@@ -49,9 +49,74 @@ def test_symbols_pipeline_sync(tmp_path: Path) -> None:
     records = pipeline.sync()
 
     client.close()
-    assert route.called
+    assert primary_route.called
     assert len(records) == 1
     output_path = manager.path_for(DatasetKind.SYMBOLS)
     stored = pq.read_table(output_path).to_pylist()
     assert stored[0]["symbol"] == "600000.SH"
     assert stored[0]["name"] == "浦发银行"
+
+
+@respx.mock
+def test_symbols_pipeline_endpoint_fallback(tmp_path: Path) -> None:
+    """当东方财富接口全部失败时，自动切换至交易所数据源。"""
+
+    respx.get("https://push2.eastmoney.com/api/qt/clist/get").mock(
+        return_value=Response(502, json={}),
+    )
+    respx.get("https://80.push2.eastmoney.com/api/qt/clist/get").mock(
+        return_value=Response(502, json={}),
+    )
+    respx.get("https://81.push2.eastmoney.com/api/qt/clist/get").mock(
+        return_value=Response(502, json={}),
+    )
+    respx.get("https://82.push2.eastmoney.com/api/qt/clist/get").mock(
+        return_value=Response(502, json={}),
+    )
+    respx.get("https://83.push2.eastmoney.com/api/qt/clist/get").mock(
+        return_value=Response(502, json={}),
+    )
+
+    sse_route = respx.get("https://query.sse.com.cn/security/stock/getStockListData2.do").mock(
+        return_value=Response(
+            200,
+            json={
+                "result": [
+                    {
+                        "SECURITY_CODE_A": "600000",
+                        "SECURITY_ABBR_A": "浦发银行",
+                        "BOARD_NAME": "上海主板",
+                        "LISTING_DATE_A": "19991110",
+                    }
+                ]
+            },
+        )
+    )
+    szse_route = respx.get("https://www.szse.cn/api/report/ShowReport").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "zqdm": "000001",
+                        "zqmc": "平安银行",
+                        "zqlb": "深圳主板",
+                        "ssrq": "19910403",
+                    }
+                ]
+            },
+        )
+    )
+
+    manager = default_manager(base_dir=tmp_path)
+    repository = ParquetRepository(manager=manager)
+    client = EastMoneyClient()
+    pipeline = SymbolsPipeline(client=client, repository=repository, page_size=100)
+
+    records = pipeline.sync()
+
+    client.close()
+    assert sse_route.called
+    assert szse_route.called
+    symbols = {item["symbol"] for item in records}
+    assert {"600000.SH", "000001.SZ"} <= symbols

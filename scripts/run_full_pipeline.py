@@ -13,9 +13,10 @@ from llm_trader.common import get_logger
 from llm_trader.config import get_settings
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
 from llm_trader.data.pipelines.symbols import SymbolsPipeline
+from llm_trader.data.pipelines.ohlcv import OhlcvPipeline
 from llm_trader.data.repositories.parquet import ParquetRepository
 from llm_trader.pipeline.auto import AutoTradingConfig, AutoTradingResult, BacktestCriteria, run_full_automation
-from llm_trader.trading.orchestrator import TradingCycleConfig
+from llm_trader.trading.orchestrator import TradingCycleConfig, resolve_candidate_symbols
 from llm_trader.monitoring import AlertEmitter
 
 LOGGER = get_logger("scripts.full_pipeline")
@@ -29,9 +30,55 @@ def _sync_data(repository: ParquetRepository) -> None:
     LOGGER.info("开始同步证券主表")
     SymbolsPipeline(repository=repository).sync()
     LOGGER.info("开始同步实时行情")
-    RealtimeQuotesPipeline(repository=repository, symbols_limit=settings.symbol_universe_limit).sync(
-        settings.symbols or None
+    use_manual_symbols = bool(settings.symbols)
+    quotes_pipeline = RealtimeQuotesPipeline(
+        repository=repository,
+        symbols_limit=settings.symbol_universe_limit if use_manual_symbols else None,
     )
+    quotes = quotes_pipeline.sync(settings.symbols or None)
+
+    temp_config = TradingCycleConfig(
+        session_id=settings.session_id,
+        strategy_id=settings.strategy_id,
+        symbols=settings.symbols,
+        objective=settings.objective,
+        indicators=tuple(settings.indicators),
+        freq=settings.freq,
+        history_start=None,
+        history_end=None,
+        initial_cash=settings.initial_cash,
+        llm_model=settings.llm_model,
+        llm_base_url=settings.llm_base_url or None,
+        only_latest_bar=settings.only_latest_bar,
+        symbol_universe_limit=settings.symbol_universe_limit,
+        execution_mode=settings.execution_mode,
+        selection_metric=settings.selection_metric,
+    )
+    symbols = resolve_candidate_symbols(temp_config, quotes)
+    if not symbols:
+        LOGGER.warning("历史行情同步跳过：未找到候选标的")
+        return
+    ohlcv_pipeline = OhlcvPipeline(repository=repository)
+    now = datetime.utcnow()
+    history_start = (now - timedelta(days=max(settings.lookback_days, 1))).date()
+    history_end = now.date()
+    LOGGER.info(
+        "开始同步历史行情",
+        extra={
+            "symbols": symbols,
+            "freq": settings.freq,
+            "start": history_start.isoformat(),
+            "end": history_end.isoformat(),
+        },
+    )
+    for symbol in symbols:
+        try:
+            ohlcv_pipeline.sync(symbol=symbol, freq=settings.freq, start=history_start, end=history_end)
+        except Exception as exc:  # pragma: no cover - 网络异常留给运行环境处理
+            LOGGER.warning(
+                "历史行情同步失败",
+                extra={"symbol": symbol, "freq": settings.freq, "error": str(exc)},
+            )
 
 
 def _build_auto_config() -> AutoTradingConfig:
@@ -55,6 +102,7 @@ def _build_auto_config() -> AutoTradingConfig:
         only_latest_bar=settings.only_latest_bar,
         symbol_universe_limit=settings.symbol_universe_limit,
         execution_mode=settings.execution_mode,
+        selection_metric=settings.selection_metric,
     )
     criteria = BacktestCriteria(
         min_total_return=settings.backtest_min_return,

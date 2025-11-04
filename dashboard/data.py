@@ -89,6 +89,19 @@ def _cached_llm_logs(strategy_id: str, session_id: str) -> Tuple[Dict[str, objec
     return tuple(load_llm_logs(strategy_id=strategy_id, session_id=session_id, limit=None))
 
 
+def _latest_log_summary(strategy_id: str, session_id: str) -> Dict[str, object]:
+    logs = _cached_llm_logs(strategy_id, session_id)
+    if not logs:
+        return {}
+    latest = logs[-1]
+    return {
+        "strategy_description": latest.get("suggestion_description"),
+        "objective": latest.get("objective"),
+        "rules": latest.get("rules"),
+        "timestamp": latest.get("timestamp"),
+    }
+
+
 def count_orders(strategy_id: str, session_id: str) -> int:
     """返回订单总数。"""
 
@@ -254,6 +267,118 @@ def list_strategy_sessions() -> List[Dict[str, str]]:
     return results
 
 
+def get_recent_trades(limit: int = 20) -> List[Dict[str, object]]:
+    """获取全局最近成交记录，包含策略/会话信息。"""
+
+    records: List[Dict[str, object]] = []
+    for pair in list_strategy_sessions():
+        strategy_id = pair["strategy_id"]
+        session_id = pair["session_id"]
+        trades = _cached_trades(strategy_id, session_id)
+        if not trades:
+            continue
+        summary = _latest_log_summary(strategy_id, session_id)
+        tail = trades[-limit:]
+        for item in tail:
+            enriched = dict(item)
+            enriched["strategy_id"] = strategy_id
+            enriched["session_id"] = session_id
+            enriched.update(summary)
+            records.append(enriched)
+    records.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+    return records[:limit]
+
+
+def get_recent_orders(limit: int = 20) -> List[Dict[str, object]]:
+    """获取全局最近订单记录，包含策略/会话信息。"""
+
+    records: List[Dict[str, object]] = []
+    for pair in list_strategy_sessions():
+        strategy_id = pair["strategy_id"]
+        session_id = pair["session_id"]
+        orders = _cached_orders(strategy_id, session_id)
+        if not orders:
+            continue
+        summary = _latest_log_summary(strategy_id, session_id)
+        tail = orders[-limit:]
+        for item in tail:
+            enriched = dict(item)
+            enriched["strategy_id"] = strategy_id
+            enriched["session_id"] = session_id
+            enriched.update(summary)
+            records.append(enriched)
+    records.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    return records[:limit]
+
+
+def aggregate_trades_by_symbol(limit: Optional[int] = None) -> pd.DataFrame:
+    """按标的聚合成交金额与笔数。"""
+
+    rows: List[Dict[str, object]] = []
+    for pair in list_strategy_sessions():
+        strategy_id = pair["strategy_id"]
+        session_id = pair["session_id"]
+        trades = _cached_trades(strategy_id, session_id)
+        for trade in trades:
+            price = float(trade.get("price") or 0.0)
+            volume = float(trade.get("volume") or 0.0)
+            amount = price * volume
+            rows.append(
+                {
+                    "strategy_id": strategy_id,
+                    "session_id": session_id,
+                    "symbol": trade.get("symbol"),
+                    "side": trade.get("side"),
+                    "amount": amount,
+                    "volume": volume,
+                    "timestamp": trade.get("timestamp"),
+                }
+            )
+    if not rows:
+        return pd.DataFrame(columns=["symbol", "amount", "volume", "count"])
+    df = pd.DataFrame(rows)
+    agg = df.groupby("symbol").agg(amount=("amount", "sum"), volume=("volume", "sum"), count=("symbol", "count"))
+    agg = agg.sort_values("amount", ascending=False)
+    if limit:
+        agg = agg.head(limit)
+    agg = agg.reset_index()
+    return agg
+
+
+def trades_time_series(symbol: Optional[str] = None) -> pd.DataFrame:
+    """返回按时间聚合的成交趋势。"""
+
+    rows: List[Dict[str, object]] = []
+    for pair in list_strategy_sessions():
+        strategy_id = pair["strategy_id"]
+        session_id = pair["session_id"]
+        trades = _cached_trades(strategy_id, session_id)
+        for trade in trades:
+            trade_symbol = trade.get("symbol")
+            if symbol and trade_symbol != symbol:
+                continue
+            price = float(trade.get("price") or 0.0)
+            volume = float(trade.get("volume") or 0.0)
+            amount = price * volume
+            rows.append(
+                {
+                    "strategy_id": strategy_id,
+                    "session_id": session_id,
+                    "symbol": trade_symbol,
+                    "timestamp": trade.get("timestamp"),
+                    "amount": amount,
+                    "volume": volume,
+                    "price": price,
+                }
+            )
+    if not rows:
+        return pd.DataFrame(columns=["timestamp", "amount", "volume", "price", "symbol"])
+    df = pd.DataFrame(rows)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp")
+    return df
+
+
 def invalidate_cache() -> None:
     """清除数据访问相关缓存。"""
 
@@ -298,6 +423,8 @@ __all__ = [
     "count_trades",
     "count_equity_points",
     "count_llm_logs",
+    "get_recent_trades",
+    "get_recent_orders",
     "list_strategy_versions",
     "list_strategy_ids",
     "list_strategy_sessions",

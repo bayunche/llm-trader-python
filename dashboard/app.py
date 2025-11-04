@@ -334,6 +334,47 @@ def main() -> None:
             st.info("暂无交易数据，请先运行自动交易循环。")
             return
 
+        st.markdown("### 实时交易看板")
+        col_refresh, col_limit = st.columns([1, 1])
+        with col_refresh:
+            if st.button("刷新实时数据", key="refresh-realtime"):
+                data.invalidate_cache()
+                st.experimental_rerun()
+        with col_limit:
+            limit_options = [10, 20, 50, 100]
+            selected_limit = st.selectbox("展示条数", limit_options, index=1, key="realtime-limit")
+
+        recent_trades = data.get_recent_trades(limit=selected_limit)
+        recent_orders = data.get_recent_orders(limit=selected_limit)
+
+        trades_tab, orders_tab = st.tabs(["最近成交", "最近订单"])
+        with trades_tab:
+            if recent_trades:
+                trades_df = pd.DataFrame(recent_trades)
+                trades_df["timestamp"] = pd.to_datetime(trades_df["timestamp"])
+                st.dataframe(trades_df)
+                st.download_button(
+                    "下载成交 CSV",
+                    trades_df.to_csv(index=False).encode("utf-8"),
+                    file_name="recent_trades.csv",
+                )
+            else:
+                st.info("暂无成交记录")
+        with orders_tab:
+            if recent_orders:
+                orders_df = pd.DataFrame(recent_orders)
+                orders_df["created_at"] = pd.to_datetime(orders_df["created_at"])
+                st.dataframe(orders_df)
+                st.download_button(
+                    "下载订单 CSV",
+                    orders_df.to_csv(index=False).encode("utf-8"),
+                    file_name="recent_orders.csv",
+                )
+            else:
+                st.info("暂无订单记录")
+
+        st.markdown("---")
+
         options = [f"{item['strategy_id']}/{item['session_id']}" for item in available_pairs]
         mapping = {label: (item["strategy_id"], item["session_id"]) for label, item in zip(options, available_pairs)}
 
@@ -353,6 +394,58 @@ def main() -> None:
         _render_version_panel(strategy_ids)
 
         _render_equity_multi(selected_pairs)
+
+        st.subheader("成交数据可视化")
+        chart_tab, table_tab = st.tabs(["图表", "数据"])
+
+        with chart_tab:
+            chart_col, series_col = st.columns([2, 1])
+            with chart_col:
+                agg_limit = st.slider("成交分布 TOP N", min_value=5, max_value=50, value=15, step=5)
+                agg_df = data.aggregate_trades_by_symbol(limit=agg_limit)
+                if not agg_df.empty:
+                    agg_chart = (
+                        alt.Chart(agg_df)
+                        .mark_bar()
+                        .encode(
+                            x=alt.X("symbol:N", sort="-y"),
+                            y="amount:Q",
+                            tooltip=["symbol", "amount", "volume", "count"],
+                        )
+                        .properties(title="成交金额分布")
+                    )
+                    st.altair_chart(agg_chart, use_container_width=True)
+                else:
+                    st.info("暂无成交数据用于绘制分布。")
+            with series_col:
+                symbol_options = ["全部"] + sorted({pair[0] for pair in selected_pairs})
+                selected_symbol = st.selectbox("成交趋势标的", symbol_options)
+                ts_df = data.trades_time_series(None if selected_symbol == "全部" else selected_symbol)
+                if not ts_df.empty:
+                    line_chart = (
+                        alt.Chart(ts_df)
+                        .mark_line()
+                        .encode(
+                            x="timestamp:T",
+                            y="amount:Q",
+                            color="symbol:N",
+                            tooltip=["symbol", "timestamp:T", "amount:Q", "volume:Q", "price:Q"],
+                        )
+                        .interactive()
+                        .properties(title="成交金额趋势")
+                    )
+                    st.altair_chart(line_chart, use_container_width=True)
+                else:
+                    st.info("暂无成交趋势数据。")
+
+        with table_tab:
+            st.markdown("#### 成交流水原始数据")
+            ts_df = data.trades_time_series()
+            if not ts_df.empty:
+                st.dataframe(ts_df)
+                st.download_button("下载成交趋势 CSV", ts_df.to_csv(index=False).encode("utf-8"), "trade_time_series.csv")
+            else:
+                st.info("暂无成交明细")
 
         tabs = st.tabs([f"{strategy}/{session}" for strategy, session in selected_pairs])
         for tab, (strategy, session) in zip(tabs, selected_pairs):

@@ -56,6 +56,7 @@ class TradingCycleConfig:
     only_latest_bar: bool = True  # 只对最近一个 bar 生成订单，避免重复建仓
     symbol_universe_limit: Optional[int] = None
     execution_mode: str = "sandbox"
+    selection_metric: str = "amount"
 
 
 def run_ai_trading_cycle(
@@ -69,13 +70,24 @@ def run_ai_trading_cycle(
 ) -> Dict[str, object]:
     """执行一次完整的 AI 交易循环并返回执行详情。"""
 
-    pipeline = realtime_pipeline or RealtimeQuotesPipeline(symbols_limit=config.symbol_universe_limit)
-    candidate_symbols = _resolve_candidate_symbols(config)
+    use_manual_symbols = bool(config.symbols)
+    pipeline = realtime_pipeline or RealtimeQuotesPipeline(
+        symbols_limit=config.symbol_universe_limit if use_manual_symbols else None
+    )
+    universe_symbols = config.symbols if use_manual_symbols else None
 
-    quotes = pipeline.sync(candidate_symbols)
-    if not quotes:
+    quotes_universe = pipeline.sync(universe_symbols)
+    if not quotes_universe:
         raise ValueError("未获取到实时行情数据")
 
+    candidate_symbols = resolve_candidate_symbols(config, quotes_universe)
+    if not candidate_symbols:
+        raise ValueError("选股逻辑未返回任何标的")
+
+    selected_set = set(candidate_symbols)
+    quotes = [item for item in quotes_universe if item.get("symbol") in selected_set]
+    if len(quotes) < len(candidate_symbols):
+        quotes = pipeline.sync(candidate_symbols)
     summary = _summarize_quotes(quotes)
 
     if generator is None:
@@ -255,14 +267,54 @@ def _build_price_lookup(
     return price_lookup
 
 
-__all__ = ["TradingCycleConfig", "run_ai_trading_cycle"]
-def _resolve_candidate_symbols(config: TradingCycleConfig) -> List[str]:
+__all__ = ["TradingCycleConfig", "run_ai_trading_cycle", "resolve_candidate_symbols"]
+
+
+def _select_symbols_from_quotes(
+    quotes: List[Dict[str, object]],
+    *,
+    metric: str,
+    limit: Optional[int],
+) -> List[str]:
+    if not quotes:
+        return []
+    df = pd.DataFrame(quotes)
+    if df.empty or "symbol" not in df.columns:
+        return []
+    metric_column = metric if metric in df.columns else "amount" if "amount" in df.columns else None
+    if metric_column is None:
+        return list(dict.fromkeys(df["symbol"].tolist()[: (limit or len(df))]))
+    values = pd.to_numeric(df[metric_column], errors="coerce").fillna(0.0)
+    df = df.assign(_metric=values)
+    df = df.sort_values("_metric", ascending=False)
+    symbols = df["symbol"].dropna().astype(str).tolist()
+    if limit is not None:
+        symbols = symbols[:limit]
+    # 去重保持顺序
+    seen = set()
+    ordered = []
+    for symbol in symbols:
+        if symbol not in seen:
+            ordered.append(symbol)
+            seen.add(symbol)
+    return ordered
+
+
+def resolve_candidate_symbols(
+    config: TradingCycleConfig,
+    quotes: Optional[List[Dict[str, object]]] = None,
+) -> List[str]:
     candidate_symbols = [symbol for symbol in config.symbols if str(symbol).strip()]
     limit = config.symbol_universe_limit
-    if limit is not None and candidate_symbols:
-        candidate_symbols = candidate_symbols[:limit]
     if candidate_symbols:
+        if limit is not None:
+            candidate_symbols = candidate_symbols[:limit]
         return list(dict.fromkeys(candidate_symbols))
+
+    if quotes:
+        selected = _select_symbols_from_quotes(quotes, metric=config.selection_metric, limit=limit)
+        if selected:
+            return selected
 
     repository = ParquetRepository()
     symbols = repository.list_active_symbols(limit=limit)

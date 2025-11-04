@@ -154,7 +154,7 @@ class TradingSettings:
 
     session_id: str = field(default_factory=lambda: _getenv("TRADING_SESSION", "session-demo"))
     strategy_id: str = field(default_factory=lambda: _getenv("TRADING_STRATEGY", "strategy-demo"))
-    symbols: List[str] = field(default_factory=lambda: _env_list("TRADING_SYMBOLS", ["600000.SH"]))
+    symbols: List[str] = field(default_factory=lambda: _env_list("TRADING_SYMBOLS", []))
     objective: str = field(default_factory=lambda: _getenv("TRADING_OBJECTIVE", "自动交易"))
     freq: str = field(default_factory=lambda: _getenv("TRADING_FREQ", "D"))
     indicators: List[str] = field(default_factory=lambda: _env_list("TRADING_INDICATORS", ["sma", "ema"]))
@@ -172,6 +172,7 @@ class TradingSettings:
     )
     llm_base_url: str = field(default_factory=lambda: _getenv("TRADING_LLM_BASE_URL", ""))
     symbol_universe_limit: int = field(default_factory=lambda: _env_int("TRADING_SYMBOL_UNIVERSE_LIMIT", 200))
+    selection_metric: str = field(default_factory=lambda: _getenv("TRADING_SELECTION_METRIC", "amount"))
     execution_mode: str = field(
         default_factory=lambda: _env_execution_mode("TRADING_EXECUTION_MODE", "sandbox")
     )
