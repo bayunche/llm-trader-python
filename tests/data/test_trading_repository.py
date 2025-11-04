@@ -97,3 +97,39 @@ def test_write_trading_equity_appends(tmp_path) -> None:
     df = pd.read_parquet(path)
     assert len(df) == 2
     assert df.iloc[-1]["equity"] == later["equity"]
+
+
+def test_write_trading_run_summary(tmp_path) -> None:
+    repo = _build_repository(tmp_path)
+    dt = datetime(2024, 1, 1, 9, 45)
+    repo.write_trading_run_summary(
+        strategy_id="strategy-ai",
+        session_id="session-a",
+        record={
+            "timestamp": dt,
+            "strategy_id": "strategy-ai",
+            "session_id": "session-a",
+            "status": "executed",
+            "decision_proceed": True,
+            "alerts": json.dumps([]),
+            "orders_executed": 2,
+            "trades_filled": 1,
+            "selected_symbols": json.dumps(["600000.SH"]),
+            "suggestion_description": "demo summary",
+            "rules": json.dumps([{"indicator": "sma"}]),
+            "llm_prompt": "prompt",
+            "llm_response": json.dumps({"rules": []}),
+            "objective": "测试",
+            "indicators": json.dumps(["sma"]),
+        },
+    )
+    path = repo.manager.path_for(
+        DatasetKind.TRADING_RUNS,
+        symbol="strategy-ai",
+        freq="session-a",
+        ensure_dir=False,
+    )
+    df = pd.read_parquet(path)
+    assert df.shape[0] == 1
+    assert df.iloc[0]["orders_executed"] == 2
+    assert df.iloc[0]["status"] == "executed"

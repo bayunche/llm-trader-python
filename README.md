@@ -30,10 +30,11 @@
 
 - **全链路闭环**：内置 `scripts/run_full_pipeline.py`，实现行情同步、LLM 策略生成、风险评估、交易执行、报表输出的自动化。
 - **大模型驱动策略**：`LLMStrategyGenerator` 使用 OpenAI Chat Completions 生成规则与标的，支持多场景提示词模板及日志追溯。
-- **真实行情接入**：`OhlcvPipeline`、`RealtimeQuotesPipeline` 默认对接东方财富公开接口，并在证券主表采集阶段自动尝试多个 push2 子域；若外部接口不可用，会降级使用上交所/深交所官方公开数据，确保流程不中断。所有数据统一落地 `ParquetRepository`。
+- **真实行情接入**：`OhlcvPipeline`、`RealtimeQuotesPipeline` 默认对接东方财富公开接口，并在证券主表采集阶段自动尝试多个 push2 子域；若外部接口不可用，会依次降级至上交所/深交所官方公开数据，再回退到本地 `metadata/symbols.parquet` 缓存，保障流程不中断。所有数据统一落地 `ParquetRepository`。
 - **自动选股**：无需手动维护候选列表，系统会在全 A 股范围内按成交额/换手率等指标排序，选取前 `symbol_universe_limit` 个标的传递给大模型评估，可通过 `TRADING_SELECTION_METRIC` 自定义指标。
 - **风险可控执行**：`run_managed_trading_cycle` 复用回测撮合引擎，结合 `RiskPolicy` 的回撤、波动、行业集中度等阈值做风控决策。
 - **多格式报表与可视化**：`ReportBuilder` + `ReportWriter` 输出 CSV、Markdown、JSON，Streamlit 仪表盘支持实时交易看板、成交分布/趋势图、资金曲线对比及 LLM 日志浏览。
+- **执行历史留痕**：每次自动交易循环会写入 `trading/runs/*.parquet`，记录大模型 prompt/response、策略规则、风控结论、订单与成交统计，可通过 API 或仪表盘回溯。
 - **DevOps 友好**：Poetry/Conda 互通，Docker Compose 一键带起数据同步、策略执行、Dashboard。
 
 ---
@@ -94,7 +95,8 @@ python -m llm_trader.data.pipelines.symbols
 python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
 ```
 
-首轮运行请先完成证券主表与历史行情同步，否则自动化流程会直接阻断。
+首轮运行请先完成证券主表与历史行情同步，否则自动化流程会直接阻断。  
+同步成功后会在 `DATA_STORE_DIR/metadata/symbols.parquet` 缓存最近一次的证券主表，后续若东方财富及交易所接口全部失联，系统会自动使用该缓存继续运行。
 
 ### 2. 全流程自动化（本地运行）
 
@@ -107,7 +109,7 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
    env PYTHONPATH=src python scripts/run_full_pipeline.py
    ```
 
-   该脚本会依次执行 **证券主表 & 实时/历史行情同步 → LLM 策略生成 → 回测验收 → 风控执行 → 报表写入**，并将阶段结果写入 `${REPORT_OUTPUT_DIR}/status.json`。证券主表步骤会先尝试东方财富多域名接口，若均失败则自动切换至上交所/深交所公开数据；实时行情同步后会自动按 `TRADING_SELECTION_METRIC`（默认 `amount`）排序选出前 `TRADING_SYMBOL_UNIVERSE_LIMIT` 个标的传递给大模型。
+   该脚本会依次执行 **证券主表 & 实时/历史行情同步 → LLM 策略生成 → 回测验收 → 风控执行 → 报表写入**，并将阶段结果写入 `${REPORT_OUTPUT_DIR}/status.json`。证券主表步骤会先尝试东方财富多域名接口，若均失败则自动切换至上交所/深交所公开数据；如交易所接口仍不可用则会回退到本地缓存的 `symbols.parquet`。实时行情同步后会自动按 `TRADING_SELECTION_METRIC`（默认 `amount`）排序选出前 `TRADING_SYMBOL_UNIVERSE_LIMIT` 个标的传递给大模型。
    首次运行若网络受限仍建议预先拉取关键标的，脚本会在缺失时自动补齐指定窗口。
 3. 产出的报表与 LLM 日志位于 `${REPORT_OUTPUT_DIR}/<strategy>/<session>/<timestamp>/`，可在仪表盘实时看板与图表模块中查看。
 4. 若需定时轮询，可使用调度器：
@@ -139,7 +141,41 @@ conda run -n llm-trader streamlit run dashboard/app.py
 
 访问 `http://localhost:8501`，查看实时交易看板、成交分布/趋势图、资金曲线对比、订单/成交流水以及提示词管理等。
 
-### 5. Docker 一键流程
+### 5. 查询历史摘要
+
+- 全量流水线每次执行后会在 `data_store/trading/runs/strategy=<策略ID>/session=<会话ID>/runs.parquet` 写入历史摘要，包含大模型 Prompt/Response、策略规则、风控结论、订单与成交统计。
+- 可通过 FastAPI 查询：
+
+  ```bash
+  curl -H "X-API-Key: ${LLM_TRADER_API_KEY}" \
+       "http://127.0.0.1:8000/api/trading/history?strategy_id=strategy-llm&session_id=session-sandbox&limit=20"
+  ```
+
+  返回示例：
+
+  ```json
+  {
+    "code": "OK",
+    "message": "success",
+    "data": [
+      {
+        "timestamp": "2025-11-04T03:35:56.585894",
+        "status": "executed",
+        "decision_proceed": true,
+        "orders_executed": 1,
+        "trades_filled": 1,
+        "selected_symbols": ["600000.SH", "000001.SZ"],
+        "suggestion_description": "基于短期均线与相对强弱指标的交易策略……",
+        "rules": [...],
+        "llm_prompt": "...",
+        "llm_response": "{...}",
+        "alerts": []
+      }
+    ]
+  }
+  ```
+
+### 6. Docker 一键流程
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build
@@ -154,12 +190,13 @@ docker compose -f docker-compose.prod.yml up --build
 | 阶段 | 说明 | 关键实现 | 测试 |
 | --- | --- | --- | --- |
 | 行情采集 | 东方财富 K 线、实时行情采集与落地 | `src/llm_trader/data/pipelines/ohlcv.py`, `src/llm_trader/data/pipelines/realtime_quotes.py` | `tests/data/test_ohlcv_pipeline.py`, `tests/data/test_realtime_quotes.py` |
-| 候选标的 | 周期同步证券主表，生成候选列表 | `src/llm_trader/data/pipelines/symbols.py`, `_resolve_candidate_symbols` | `tests/data/test_symbols_pipeline.py`, `tests/trading/test_orchestrator.py` |
+| 候选标的 | 周期同步证券主表，东方财富失败时降级至上/深交易所并最终回退本地缓存，生成候选列表 | `src/llm_trader/data/pipelines/symbols.py`, `_resolve_candidate_symbols` | `tests/data/test_symbols_pipeline.py`, `tests/trading/test_orchestrator.py` |
 | 大模型策略 | Prompt 模板 → OpenAI → 规则解析与日志 | `src/llm_trader/strategy/llm_generator.py`, `src/llm_trader/strategy/prompts.py` | `tests/strategy/test_llm_generator.py`, `tests/strategy/test_prompts.py` |
 | 交易执行 | 订单生成、撮合、账户快照 | `src/llm_trader/trading/orchestrator.py`, `src/llm_trader/trading/session.py` | `tests/trading/test_session.py`, `tests/trading/test_orchestrator.py` |
 | 风险控制 | 回撤、仓位、行业集中度等阈值评估与告警 | `src/llm_trader/trading/manager.py`, `src/llm_trader/trading/policy.py` | `tests/trading/test_manager.py`, `tests/trading/test_policy.py` |
 | 回测验收 | `BacktestRunner` 校验策略表现 | `src/llm_trader/pipeline/auto.py` | `tests/pipeline/test_auto.py`, `tests/pipeline/test_full_pipeline.py` |
 | 报表输出 | 生成 CSV/Markdown/JSON + LLM 日志 | `src/llm_trader/reports/` | `tests/reports/test_builder.py` |
+| 历史留痕 | 汇总模型输入输出、风控决策、订单统计 | `src/llm_trader/pipeline/auto.py`, `src/llm_trader/data/repositories/parquet.py`, `src/llm_trader/api/utils.py` | `tests/pipeline/test_auto.py`, `tests/data/test_trading_repository.py`, `tests/api/test_trading.py` |
 | 状态追踪 | `PipelineController` 写入阶段状态与告警 | `scripts/run_full_pipeline.py` | 冒烟测试脚本 |
 
 ---

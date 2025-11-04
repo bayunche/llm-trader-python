@@ -1,0 +1,31 @@
+{
+  "question": "应在全链路哪个阶段记录交易历史摘要，以保证在无订单或成交时仍能保留一次循环的输入/输出？",
+  "priority": "high",
+  "reason": "需要明确记录位置，避免重复调用大模型或错过风控决策信息。",
+  "investigation_timestamp": "2025-11-04T20:50:09.775882+08:00",
+  "findings": [
+    {
+      "evidence": "run_full_automation 在执行 run_ai_trading_cycle 后会根据 backtest 决策，再调用 run_managed_trading_cycle，该函数内部重新执行 run_ai_trading_cycle 并结合 RiskPolicy 评估。",
+      "paths": [
+        "src/llm_trader/pipeline/auto.py:61",
+        "src/llm_trader/pipeline/auto.py:112",
+        "src/llm_trader/trading/manager.py:46"
+      ]
+    },
+    {
+      "evidence": "ManagedTradingResult.raw_result 即 run_managed_trading_cycle 内部 run_ai_trading_cycle 的返回值，包含 `suggestion`、`orders_executed`、`trades_filled`、`selected_symbols` 等关键数据，同时决策结果保存在 decision 属性。",
+      "paths": [
+        "src/llm_trader/trading/manager.py:23",
+        "src/llm_trader/trading/manager.py:62"
+      ]
+    },
+    {
+      "evidence": "TradingSession._record 在每次 execute 时写入订单/成交/权益；若订单列表为空将直接返回，不会记录本次循环，从而导致没有历史痕迹。",
+      "paths": [
+        "src/llm_trader/trading/session.py:70",
+        "src/llm_trader/data/repositories/parquet.py:218"
+      ]
+    }
+  ],
+  "conclusion": "应在 run_full_automation 完成风控评估后（即获得 ManagedTradingResult）统一写入交易历史摘要，此时可访问决策结果、实际执行统计以及大模型输出；若订单为空也能记录一次循环的状态。"
+}

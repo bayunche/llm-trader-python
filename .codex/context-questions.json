@@ -1,13 +1,13 @@
 {
   "known": [
-    "数据采集层包含 OhlcvPipeline、RealtimeQuotesPipeline 与 SymbolsPipeline，并通过 ParquetRepository 持久化，可由 tests/data 系列测试验证。",
-    "LLMStrategyGenerator、TradingOrchestrator、TradingSession 与 RiskPolicy 串联完成策略生成、下单执行与风控；run_full_automation 在满足回测指标后生成报表。"
+    "SymbolsPipeline 已实现多级降级并可落盘缓存；TradingSession 在有成交时写入订单、成交与权益；LLMStrategyLogRepository 会把 prompt/response 追加到 JSONL，仪表盘可读取。",
+    "当前没有统一的交易循环历史表，仪表盘依赖实时读取 Parquet/JSONL，若无订单则缺乏可视化数据。"
   ],
   "unknown": [
-    "高优先级：scripts/run_full_pipeline.py 是否已经将数据同步→策略生成→受控交易→报表输出串联成默认自动流程？",
-    "高优先级：缺失 OPENAI_API_KEY 时自动化流程能否退化为离线策略或需要显式配置 fake completion？",
-    "中优先级：live 执行目前仅提供 MockBrokerClient，是否影响\"完成交易\"的需求边界，需要在 README 中明确说明？",
-    "中优先级：报表生成依赖的 Parquet 数据是否由 run_managed_trading_cycle 自动写入还是需要额外收集脚本？"
+    "高优先级：应在全链路哪个阶段记录交易历史摘要，以保证在无订单或成交时仍能保留一次循环的输入/输出？",
+    "高优先级：交易历史摘要需要包含哪些字段（策略 ID、session、LLM prompt/response、selected symbols、orders/trades 统计等），如何与现有数据格式（Parquet/JSONL）兼容？",
+    "中优先级：新增的历史数据需如何通过 FastAPI 与 Dashboard 暴露，是否需要新的 endpoint 或复用现有 `/api/trading/logs`？",
+    "中优先级：如何避免与现有日志/报表重复存储，同时保持数据可分页查询？"
   ],
-  "notes": "需进一步查阅脚本入口与配置默认值，确认 README 增补时对自动化流程与依赖进行说明。"
+  "notes": "后续深挖将聚焦记录落点与数据结构设计；完成方案后需同步 API、Dashboard 以及文档。"
 }

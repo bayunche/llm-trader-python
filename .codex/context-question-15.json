@@ -1,0 +1,29 @@
+{
+  "question": "深交所接口返回 JSON 为 list 时解析失败，应如何兼容不同响应格式？",
+  "priority": "high",
+  "reason": "日志显示 AttributeError: 'list' object has no attribute 'get'，导致交易所降级无法继续，需要明确解析逻辑。",
+  "investigation_timestamp": "2025-11-04T16:37:59.103127+08:00",
+  "findings": [
+    {
+      "evidence": "_fetch_szse 直接调用 response.json() 并假设结果为 dict，随即访问 payload.get('data')，若实际返回 list 会触发 AttributeError。",
+      "paths": [
+        "src/llm_trader/data/pipelines/symbols.py:198",
+        "src/llm_trader/data/pipelines/symbols.py:200",
+        "src/llm_trader/data/pipelines/symbols.py:201"
+      ]
+    },
+    {
+      "evidence": "用户运行日志提示 \"AttributeError: 'list' object has no attribute 'get'\"，说明接口在部分场景返回 list，需要检测类型后提取其中的 dict 元素。",
+      "paths": [
+        "logs:2025-11-04 16:28:55 AttributeError stacktrace"
+      ]
+    },
+    {
+      "evidence": "以往深交所 ShowReport 接口通常返回类似 `[{'data': [...]}]` 结构，可通过判断 list 并提取首个 dict，再读取 'data' 字段避免异常。",
+      "paths": [
+        "参考: szse ShowReport JSON 结构（社区示例）"
+      ]
+    }
+  ],
+  "conclusion": "在解析深交所响应时应先判断 payload 类型：若为 list 则提取首个 dict，再访问 'data'；若为 dict 直接读取；其余情况返回空列表并记录告警，确保降级流程健壮。"
+}

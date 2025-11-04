@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
@@ -61,7 +62,9 @@ def _load_mock_bars(*_args, **_kwargs):
     ]
 
 
-def test_full_automation_executes(monkeypatch) -> None:
+def test_full_automation_executes(tmp_path: Path, monkeypatch) -> None:
+    base_dir = tmp_path / "data_store"
+    monkeypatch.setenv("DATA_STORE_DIR", str(base_dir))
     config = AutoTradingConfig(
         trading=TradingCycleConfig(
             session_id="session",
@@ -88,6 +91,8 @@ def test_full_automation_executes(monkeypatch) -> None:
             "session": session,
             "selected_symbols": ["600000.SH"],
             "config": config.trading,
+            "llm_prompt": "prompt",
+            "llm_response": "response",
         }
 
     monkeypatch.setattr("llm_trader.pipeline.auto.run_ai_trading_cycle", fake_cycle)
@@ -95,6 +100,10 @@ def test_full_automation_executes(monkeypatch) -> None:
     managed_result = ManagedTradingResult(
         decision=RiskDecision(proceed=True, alerts=[]),
         raw_result={
+            "suggestion": PipelineFakeGenerator().generate(None),
+            "selected_symbols": ["600000.SH"],
+            "llm_prompt": "prompt",
+            "llm_response": "response",
             "orders_executed": 1,
             "trades_filled": 1,
             "session": TradingSession(TradingSessionConfig(session_id="session", strategy_id="strategy")),
@@ -107,9 +116,16 @@ def test_full_automation_executes(monkeypatch) -> None:
     assert result.status == "executed"
     assert result.backtest_metrics is not None
     assert result.report_paths is None
+    runs_path = base_dir / "trading" / "runs" / "strategy=strategy" / "session=session" / "runs.parquet"
+    assert runs_path.exists()
+    df = pd.read_parquet(runs_path)
+    assert not df.empty
+    assert df.iloc[-1]["status"] == "executed"
+    assert df.iloc[-1]["orders_executed"] == 1
 
 
-def test_full_automation_rejects_on_backtest(monkeypatch) -> None:
+def test_full_automation_rejects_on_backtest(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
     config = AutoTradingConfig(
         trading=TradingCycleConfig(
             session_id="session",
@@ -136,6 +152,8 @@ def test_full_automation_rejects_on_backtest(monkeypatch) -> None:
             "session": session,
             "selected_symbols": ["600000.SH"],
             "config": config.trading,
+            "llm_prompt": "prompt",
+            "llm_response": "response",
         }
 
     monkeypatch.setattr("llm_trader.pipeline.auto.run_ai_trading_cycle", fake_cycle)

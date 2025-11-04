@@ -79,6 +79,28 @@ def _prepare_trading_data(tmp_path, monkeypatch) -> None:
         timestamp=dt,
     )
 
+    repo.write_trading_run_summary(
+        strategy_id="strategy-ai",
+        session_id="session-1",
+        record={
+            "timestamp": dt,
+            "strategy_id": "strategy-ai",
+            "session_id": "session-1",
+            "status": "executed",
+            "decision_proceed": True,
+            "alerts": json.dumps([]),
+            "orders_executed": 1,
+            "trades_filled": 1,
+            "selected_symbols": json.dumps(["600000.SH"]),
+            "suggestion_description": "demo run",
+            "rules": json.dumps([{"indicator": "sma", "operator": ">", "threshold": 10.0}]),
+            "llm_prompt": "prompt",
+            "llm_response": json.dumps({"rules": []}),
+            "objective": "测试",
+            "indicators": json.dumps(["sma"]),
+        },
+    )
+
 
 def test_trading_endpoints(tmp_path, monkeypatch) -> None:
     _prepare_trading_data(tmp_path, monkeypatch)
@@ -116,3 +138,16 @@ def test_trading_endpoints(tmp_path, monkeypatch) -> None:
     )
     assert resp.status_code == 200
     assert resp.json()["data"][0]["objective"] == "test"
+
+    resp = client.get(
+        "/api/trading/history",
+        params={"strategy_id": "strategy-ai", "session_id": "session-1"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    history = resp.json()["data"]
+    assert history
+    entry = history[-1]
+    assert entry["status"] == "executed"
+    assert entry["llm_prompt"] == "prompt"
+    assert entry["selected_symbols"] == ["600000.SH"]

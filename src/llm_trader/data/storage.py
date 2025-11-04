@@ -32,6 +32,7 @@ class DatasetKind(str, Enum):
     TRADING_ORDERS = "trading_orders"
     TRADING_TRADES = "trading_trades"
     TRADING_EQUITY = "trading_equity"
+    TRADING_RUNS = "trading_runs"
     STRATEGY_LLM_LOGS = "strategy_llm_logs"
     STRATEGY_PROMPTS = "strategy_prompts"
 
@@ -238,6 +239,15 @@ def default_manager(base_dir: Optional[Path] = None) -> DataStoreManager:
             partition_template="session={symbol}/strategy={freq}",
             filename_template="equity.parquet",
             description="自动交易权益曲线与资金快照",
+        )
+    )
+    manager.register(
+        DatasetConfig(
+            kind=DatasetKind.TRADING_RUNS,
+            relative_dir="trading/runs",
+            partition_template="strategy={symbol}/session={freq}",
+            filename_template="runs.parquet",
+            description="自动交易循环历史摘要",
         )
     )
     manager.register(

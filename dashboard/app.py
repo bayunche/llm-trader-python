@@ -183,6 +183,48 @@ def _render_trades(strategy_id: str, session_id: str) -> pd.DataFrame:
     return df
 
 
+def _render_history(strategy_id: str, session_id: str) -> List[dict]:
+    st.subheader("交易历史摘要")
+    total = data.count_history(strategy_id, session_id)
+    if total == 0:
+        st.info("暂无历史记录")
+        return []
+    offset, page_size, page_index, max_page = _pagination_controls(
+        f"history-{strategy_id}-{session_id}",
+        total,
+        default_size=50,
+    )
+    records = data.get_history(strategy_id, session_id, limit=page_size, offset=offset)
+    st.caption(f"第 {page_index}/{max_page} 页，共 {total} 条记录")
+
+    for entry in records:
+        timestamp = entry.get("timestamp", "")
+        status = entry.get("status", "")
+        orders_executed = entry.get("orders_executed", 0)
+        trades_filled = entry.get("trades_filled", 0)
+        proceed = "✅ 通过" if entry.get("decision_proceed") else "⛔ 阻断"
+        st.markdown(
+            f"**时间**：{timestamp} ｜ **状态**：{status} ｜ **风控**：{proceed} "
+            f"｜ **订单数**：{orders_executed} ｜ **成交数**：{trades_filled}"
+        )
+        selected_symbols = entry.get("selected_symbols") or []
+        st.markdown(f"**选股**：{', '.join(selected_symbols) if selected_symbols else '无'}")
+        description = entry.get("suggestion_description")
+        if description:
+            st.markdown(f"**策略说明**：{description}")
+        alerts = entry.get("alerts") or []
+        if alerts:
+            st.warning("；".join(alerts))
+        with st.expander("策略规则", expanded=False):
+            st.json(entry.get("rules", []))
+        with st.expander("Prompt", expanded=False):
+            st.code(entry.get("llm_prompt", ""), language="markdown")
+        with st.expander("Response", expanded=False):
+            st.code(entry.get("llm_response", ""), language="json")
+        st.markdown("---")
+    return records
+
+
 def _render_llm_logs(strategy_id: str, session_id: str) -> List[dict]:
     st.subheader("LLM 策略日志")
     total_logs = data.count_llm_logs(strategy_id, session_id)
@@ -451,6 +493,7 @@ def main() -> None:
         for tab, (strategy, session) in zip(tabs, selected_pairs):
             with tab:
                 st.markdown("### 策略详情")
+                _render_history(strategy, session)
                 logs = _render_llm_logs(strategy, session)
                 _render_llm_assistant(strategy, session, logs)
                 st.markdown("### 订单流水")

@@ -12,6 +12,7 @@ from llm_trader.api.utils import (
     load_llm_logs,
     load_trading_equity,
     load_trading_orders,
+    load_trading_runs,
     load_trading_trades,
 )
 from llm_trader.data import DatasetKind, default_manager
@@ -89,6 +90,13 @@ def _cached_llm_logs(strategy_id: str, session_id: str) -> Tuple[Dict[str, objec
     return tuple(load_llm_logs(strategy_id=strategy_id, session_id=session_id, limit=None))
 
 
+@lru_cache(maxsize=128)
+def _cached_run_history(strategy_id: str, session_id: str) -> Tuple[Dict[str, object], ...]:
+    """缓存交易历史摘要。"""
+
+    return tuple(load_trading_runs(strategy_id=strategy_id, session_id=session_id, limit=None))
+
+
 def _latest_log_summary(strategy_id: str, session_id: str) -> Dict[str, object]:
     logs = _cached_llm_logs(strategy_id, session_id)
     if not logs:
@@ -142,6 +150,13 @@ def get_llm_logs(strategy_id: str, session_id: str, limit: Optional[int] = None,
     return _slice_records(records, offset, limit)
 
 
+def get_history(strategy_id: str, session_id: str, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
+    """获取交易历史摘要，支持分页。"""
+
+    records = _cached_run_history(strategy_id, session_id)
+    return _slice_records(records, offset, limit)
+
+
 def count_equity_points(strategy_id: str, session_id: str) -> int:
     """返回资金曲线记录数。"""
 
@@ -152,6 +167,12 @@ def count_llm_logs(strategy_id: str, session_id: str) -> int:
     """返回 LLM 日志条数。"""
 
     return len(_cached_llm_logs(strategy_id, session_id))
+
+
+def count_history(strategy_id: str, session_id: str) -> int:
+    """返回交易历史摘要条数。"""
+
+    return len(_cached_run_history(strategy_id, session_id))
 
 
 def _prompt_manager() -> PromptTemplateManager:
@@ -386,6 +407,7 @@ def invalidate_cache() -> None:
     _cached_trades.cache_clear()
     _cached_equity.cache_clear()
     _cached_llm_logs.cache_clear()
+    _cached_run_history.cache_clear()
     global _PROMPT_MANAGER
     _PROMPT_MANAGER = None
     get_settings.cache_clear()
@@ -419,10 +441,12 @@ __all__ = [
     "get_trades",
     "get_equity_curve",
     "get_llm_logs",
+    "get_history",
     "count_orders",
     "count_trades",
     "count_equity_points",
     "count_llm_logs",
+    "count_history",
     "get_recent_trades",
     "get_recent_orders",
     "list_strategy_versions",

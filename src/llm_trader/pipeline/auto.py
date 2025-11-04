@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from llm_trader.backtest import BacktestRunner, Order
 from llm_trader.backtest.models import OrderSide
 from llm_trader.config import get_settings
 from llm_trader.common import get_logger
+from llm_trader.data.repositories.parquet import ParquetRepository
 from llm_trader.reports import ReportBuilder, ReportPayload, ReportWriter, load_report_payload
 from llm_trader.trading import TradingCycleConfig, run_managed_trading_cycle
 from llm_trader.trading.manager import ManagedTradingResult
@@ -101,6 +103,10 @@ def run_full_automation(
         trading_session=trading_result["session"],
     )
     status = "executed" if managed.decision.proceed else "risk_blocked"
+    try:
+        _record_trading_history(derived_config, managed, status)
+    except Exception as exc:  # pragma: no cover - 历史记录失败不影响主流程
+        _LOGGER.warning("记录交易历史摘要失败", extra={"error": str(exc)})
     report_paths: Optional[Dict[str, Path]] = None
     try:
         report_paths = _generate_reports(
@@ -180,6 +186,58 @@ __all__ = [
     "AutoTradingResult",
     "run_full_automation",
 ]
+
+
+def _record_trading_history(
+    config: TradingCycleConfig,
+    managed: ManagedTradingResult,
+    status: str,
+) -> None:
+    repo = ParquetRepository()
+    raw = managed.raw_result or {}
+    suggestion = raw.get("suggestion")
+    if suggestion is not None:
+        suggestion_description = suggestion.description
+        rules_payload = [
+            {
+                "indicator": rule.indicator,
+                "column": rule.column,
+                "params": rule.params,
+                "operator": rule.operator,
+                "threshold": rule.threshold,
+            }
+            for rule in suggestion.rules
+        ]
+    else:
+        suggestion_description = ""
+        rules_payload = []
+
+    selected_symbols = raw.get("selected_symbols") or []
+    if not selected_symbols and suggestion is not None:
+        selected_symbols = suggestion.selected_symbols
+
+    record = {
+        "timestamp": datetime.utcnow(),
+        "strategy_id": config.strategy_id,
+        "session_id": config.session_id,
+        "status": status,
+        "decision_proceed": managed.decision.proceed,
+        "alerts": json.dumps(managed.decision.alerts, ensure_ascii=False),
+        "orders_executed": raw.get("orders_executed", 0),
+        "trades_filled": raw.get("trades_filled", 0),
+        "selected_symbols": json.dumps(selected_symbols, ensure_ascii=False),
+        "suggestion_description": suggestion_description,
+        "rules": json.dumps(rules_payload, ensure_ascii=False),
+        "llm_prompt": raw.get("llm_prompt"),
+        "llm_response": raw.get("llm_response"),
+        "objective": config.objective,
+        "indicators": json.dumps(list(config.indicators), ensure_ascii=False),
+    }
+    repo.write_trading_run_summary(
+        strategy_id=config.strategy_id,
+        session_id=config.session_id,
+        record=record,
+    )
 
 
 def _main() -> None:  # pragma: no cover - 简易 CLI

@@ -304,6 +304,36 @@ class ParquetRepository:
             },
         )
 
+    def write_trading_run_summary(
+        self,
+        *,
+        strategy_id: str,
+        session_id: str,
+        record: Record,
+    ) -> None:
+        normalized = self._ensure_datetime_field([record], "timestamp")
+        path = self.manager.path_for(
+            DatasetKind.TRADING_RUNS,
+            symbol=strategy_id,
+            freq=session_id,
+        )
+        combined = self._merge_existing(
+            path,
+            normalized,
+            subset=("timestamp",),
+            sort_key="timestamp",
+        )
+        self._write_table(path, combined)
+        _LOGGER.info(
+            "已写入交易历史摘要",
+            extra={
+                "strategy_id": strategy_id,
+                "session_id": session_id,
+                "rows": len(normalized),
+                "path": str(path),
+            },
+        )
+
     def latest_timestamp(self, symbol: str, freq: str) -> Optional[datetime]:
         kind = DatasetKind.OHLCV_DAILY if freq.upper() == "D" else DatasetKind.OHLCV_INTRADAY
         config: DatasetConfig = self.manager.get(kind)

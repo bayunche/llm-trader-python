@@ -81,6 +81,27 @@ def _seed(tmp_path) -> None:
         payload={"objective": "test"},
         timestamp=dt,
     )
+    repo.write_trading_run_summary(
+        strategy_id="strategy-ai",
+        session_id="session-1",
+        record={
+            "timestamp": dt,
+            "strategy_id": "strategy-ai",
+            "session_id": "session-1",
+            "status": "executed",
+            "decision_proceed": True,
+            "alerts": json.dumps([]),
+            "orders_executed": 1,
+            "trades_filled": 1,
+            "selected_symbols": json.dumps(["600000.SH"]),
+            "suggestion_description": "demo history",
+            "rules": json.dumps([{"indicator": "sma", "operator": ">", "threshold": 9.0}]),
+            "llm_prompt": "prompt",
+            "llm_response": json.dumps({"rules": []}),
+            "objective": "test",
+            "indicators": json.dumps(["sma"]),
+        },
+    )
 
 
 def test_data_access(tmp_path, monkeypatch) -> None:
@@ -92,6 +113,7 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     trades = data.get_trades("strategy-ai", "session-1", limit=1)
     equity = data.get_equity_curve("strategy-ai", "session-1")
     logs = data.get_llm_logs("strategy-ai", "session-1")
+    history = data.get_history("strategy-ai", "session-1")
     strategies = data.list_strategy_ids()
     sessions = data.list_strategy_sessions()
     versions = data.list_strategy_versions("strategy-ai")
@@ -104,6 +126,8 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     assert trades[0]["trade_id"] == "t-1"
     assert equity[0]["equity"] == 100500.0
     assert logs[0]["objective"] == "test"
+    assert history and history[0]["status"] == "executed"
+    assert "prompt" in history[0]["llm_prompt"]
     assert "strategy-ai" in strategies
     assert {"strategy_id": "strategy-ai", "session_id": "session-1"} in sessions
     assert versions and versions[0].version_id == "v1"
@@ -111,6 +135,7 @@ def test_data_access(tmp_path, monkeypatch) -> None:
     assert data.count_trades("strategy-ai", "session-1") == 1
     assert data.count_equity_points("strategy-ai", "session-1") >= 1
     assert data.count_llm_logs("strategy-ai", "session-1") == 1
+    assert data.count_history("strategy-ai", "session-1") == 1
     assert recent_trades and recent_trades[0]["strategy_id"] == "strategy-ai"
     assert recent_orders and recent_orders[0]["strategy_id"] == "strategy-ai"
     assert not agg.empty and "amount" in agg.columns

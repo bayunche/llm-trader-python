@@ -137,3 +137,46 @@ def load_llm_logs(strategy_id: str, session_id: str, limit: Optional[int] = None
     if limit:
         entries = entries[-limit:]
     return entries
+
+
+def load_trading_runs(
+    strategy_id: str,
+    session_id: str,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> List[Dict[str, object]]:
+    manager = default_manager()
+    path = manager.path_for(
+        DatasetKind.TRADING_RUNS,
+        symbol=strategy_id,
+        freq=session_id,
+        ensure_dir=False,
+    )
+    if not path.exists():
+        return []
+    df = pd.read_parquet(path)
+    if df.empty:
+        return []
+    df = df.sort_values("timestamp")
+    if offset > 0:
+        df = df.iloc[offset:]
+    if limit is not None:
+        df = df.tail(limit)
+    records = df.to_dict("records")
+    for item in records:
+        ts = item.get("timestamp")
+        if isinstance(ts, datetime):
+            item["timestamp"] = ts.isoformat()
+        for field in ("selected_symbols", "rules", "alerts", "indicators"):
+            value = item.get(field)
+            if isinstance(value, str):
+                try:
+                    item[field] = json.loads(value)
+                except json.JSONDecodeError:
+                    continue
+        # 兼容历史记录缺失字段
+        item.setdefault("selected_symbols", [])
+        item.setdefault("rules", [])
+        item.setdefault("alerts", [])
+        item.setdefault("indicators", [])
+    return records

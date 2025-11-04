@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import random
 from typing import Dict, List, Optional
 
 import httpx
+import pyarrow.parquet as pq
 
 from llm_trader.common import DataSourceError, get_logger
+from llm_trader.data import DatasetKind
 from llm_trader.data.quality import drop_duplicates, drop_na, ensure_columns, sort_records
 from llm_trader.data.repositories.parquet import ParquetRepository
 from llm_trader.data.utils import build_symbol, parse_date
@@ -23,7 +26,21 @@ _SYMBOLS_ENDPOINTS = [
     "https://83.push2.eastmoney.com/api/qt/clist/get",
 ]
 _SSE_URL = "https://query.sse.com.cn/security/stock/getStockListData2.do"
-_SZSE_URL = "https://www.szse.cn/api/report/ShowReport"
+_SSE_HEADERS = {
+    "Referer": "https://www.sse.com.cn/assortment/stock/list/share/",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+}
+_SZSE_URL = "https://www.szse.cn/api/report/ShowReport/data"
+_SZSE_HEADERS = {
+    "Referer": "https://www.szse.cn/market/stock/list/",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+}
 _SZSE_TABS = ("tab1", "tab2", "tab3")
 _LOGGER = get_logger("data.pipeline.symbols")
 
@@ -50,12 +67,47 @@ class SymbolsPipeline:
             except Exception as exc:  # pragma: no cover - 网络异常按降级策略处理
                 last_error = exc
                 _LOGGER.warning("证券主表接口访问失败，尝试备用端点", extra={"endpoint": endpoint, "error": str(exc)})
+        fallback_error: Optional[Exception] = None
         try:
-            return self._fetch_from_exchanges()
+            records = self._fetch_from_exchanges()
+            if records:
+                return records
         except Exception as exc:
-            if last_error:
-                raise DataSourceError("东方财富未返回任何证券数据") from exc
-            raise DataSourceError("东方财富未返回任何证券数据") from exc
+            fallback_error = exc
+            _LOGGER.warning("上交所/深交所接口访问失败", extra={"error": str(exc)})
+
+        cache_path = self.repository.manager.path_for(DatasetKind.SYMBOLS, ensure_dir=False)
+        if cache_path.exists():
+            try:
+                table = pq.read_table(cache_path)
+                cached_records = table.to_pylist()
+            except Exception as exc:  # pragma: no cover - 仅在缓存损坏时触发
+                _LOGGER.warning(
+                    "读取证券主表缓存失败",
+                    extra={"path": str(cache_path), "error": str(exc)},
+                )
+            else:
+                if cached_records:
+                    try:
+                        ensure_columns(cached_records, ["symbol", "name", "board", "listed_date", "status"])
+                    except Exception as exc:  # pragma: no cover - 字段缺失时告警
+                        _LOGGER.warning(
+                            "缓存证券主表字段异常",
+                            extra={"path": str(cache_path), "error": str(exc)},
+                        )
+                    else:
+                        cleaned = drop_duplicates(cached_records, subset=["symbol"])
+                        cleaned = drop_na(cleaned, subset=["symbol", "name"])
+                        cleaned = sort_records(cleaned, "symbol")
+                        if cleaned:
+                            _LOGGER.warning(
+                                "使用本地缓存证券主表完成降级",
+                                extra={"path": str(cache_path), "rows": len(cleaned)},
+                            )
+                            return cleaned
+
+        error = fallback_error or last_error or DataSourceError("东方财富未返回任何证券数据")
+        raise DataSourceError("东方财富未返回任何证券数据") from error
 
     def _fetch_from_endpoint(self, endpoint: str) -> List[Dict[str, object]]:
         records: List[Dict[str, object]] = []
@@ -112,11 +164,6 @@ class SymbolsPipeline:
         return cleaned
 
     def _fetch_sse(self) -> List[Dict[str, object]]:
-        headers = {
-            "Referer": "http://www.sse.com.cn/assortment/stock/list/share/",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-        }
         params = {
             "isPagination": "true",
             "stockType": "1",
@@ -125,10 +172,15 @@ class SymbolsPipeline:
             "pageHelp.beginPage": "1",
             "pageHelp.endPage": "1",
         }
-        with httpx.Client(headers=headers, timeout=10.0) as client:
+        with httpx.Client(headers=_SSE_HEADERS, timeout=10.0) as client:
             response = client.get(_SSE_URL, params=params)
             response.raise_for_status()
-            payload = response.json()
+            text = response.text.strip()
+            if text.startswith(("jsonpCallback", "_")):
+                start = text.find("(")
+                end = text.rfind(")")
+                text = text[start + 1 : end]
+            payload = json.loads(text)
         items = payload.get("result", [])
         records: List[Dict[str, object]] = []
         for item in items:
@@ -151,24 +203,32 @@ class SymbolsPipeline:
         return records
 
     def _fetch_szse(self) -> List[Dict[str, object]]:
-        headers = {
-            "Referer": "http://www.szse.cn/market/stock/list/",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-        }
         records: List[Dict[str, object]] = []
-        with httpx.Client(headers=headers, timeout=10.0) as client:
+        with httpx.Client(headers=_SZSE_HEADERS, timeout=10.0) as client:
             for tab in _SZSE_TABS:
                 params = {
                     "SHOWTYPE": "JSON",
                     "CATALOGID": "1110",
                     "TABKEY": tab,
+                    "PAGENO": 1,
+                    "PAGESIZE": 5000,
                     "random": f"0.{random.randint(100000, 999999)}",
                 }
                 response = client.get(_SZSE_URL, params=params)
                 response.raise_for_status()
                 payload = response.json()
-                data = payload.get("data", [])
+                if isinstance(payload, list):
+                    payload = next((item for item in payload if isinstance(item, dict)), {})
+                if isinstance(payload, dict):
+                    data = payload.get("data", [])
+                else:
+                    data = []
+                if not isinstance(data, list):
+                    _LOGGER.warning(
+                        "深交所返回数据格式异常",
+                        extra={"tab": tab, "type": type(payload).__name__},
+                    )
+                    continue
                 for item in data:
                     code = item.get("zqdm")
                     name = item.get("zqmc")

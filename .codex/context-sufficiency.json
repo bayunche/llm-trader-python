@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "已明确开发计划的阶段划分与验收标准，可对照代码与测试确认交付情况。"
+    "notes": "已明确交易历史摘要需提供 timestamp/status/orders/trades/LLM prompt|response 等字段，并通过新增 API schema 暴露。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "掌握监控告警、数据质量测试与仪表盘实现所用的 Python/Streamlit/pytest 组合，便于评估功能落地程度。"
+    "notes": "计划使用现有 ParquetRepository 扩展 DatasetKind 并存储 JSON 字符串，无需引入额外依赖。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "Phase C3-C5 已实装并通过单元测试、仪表盘测试验证，后续风险主要在持续维护与监测。"
+    "notes": "风险点：重复写入导致历史数据被覆盖；需要确保 `_merge_existing` 去重逻辑正确，且 JSON 序列化不会超出 Parquet 字段限制。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "通过比对开发计划、关键模块源码与测试覆盖，验证各阶段完成度；如有缺口，将在报告中列为未完成项。"
+    "notes": "将编写仓储写入与 API 读取单元测试，使用 curl/pytest 模拟请求验证模型日志与交易记录能同时返回。"
   },
   "status": "ready_for_planning"
 }

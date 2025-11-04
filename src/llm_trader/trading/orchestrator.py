@@ -187,6 +187,8 @@ def run_ai_trading_cycle(
 
     return {
         "suggestion": suggestion,
+        "llm_prompt": last_prompt,
+        "llm_response": last_raw,
         "quotes": quotes,
         "orders_executed": sum(len(v) for v in orders_by_dt.values()),
         "trades_filled": len(executed_trades),

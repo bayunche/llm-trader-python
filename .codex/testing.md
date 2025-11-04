@@ -44,3 +44,7 @@
 | 2025-11-03 23:17 | `env PYTHONPATH=src python3 -m pytest tests/dashboard/test_data_access.py` | ✅ 通过 | 仪表盘缓存与分页回归测试 |
 | 2025-11-03 23:33 | `bash scripts/run-tests-in-docker.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，无法在容器内运行 pytest |
 | 2025-11-03 23:33 | `bash scripts/run-prod-smoke.sh` | ⚠️ 未执行 | sandbox 环境禁止 docker，冒烟脚本未能启动 |
+| 2025-11-04 16:38 | `env PYTHONPATH=src python3 -m pytest tests/data/test_symbols_pipeline.py` | ⚠️ 未执行 | 当前环境缺少 pytest，请先安装依赖后重试 |
+| 2025-11-04 16:39 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/data/pipelines/symbols.py tests/data/test_symbols_pipeline.py` | ✅ 通过 | 新增降级逻辑与测试语法检查 |
+| 2025-11-04 20:51 | `env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py` | ⚠️ 未执行 | 当前环境缺少 pytest，请先安装依赖后重试 |
+| 2025-11-04 20:52 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/pipeline/auto.py src/llm_trader/api/utils.py src/llm_trader/api/routes/trading.py src/llm_trader/api/schemas.py dashboard/data.py dashboard/app.py` | ✅ 通过 | 新增交易历史与接口改造语法检查 |

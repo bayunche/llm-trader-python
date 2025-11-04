@@ -26,3 +26,6 @@
 | 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_manager.py` | ✅ 通过 | 管线风控阻断与告警路径校验 |
 | 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/strategy/test_prompts.py` | ✅ 通过 | 提示词多模板与版本管理回归 |
 | 2025-11-03 | `env PYTHONPATH=src python3 -m pytest tests/dashboard/test_data_access.py` | ✅ 通过 | 仪表盘缓存/分页与提示词版本回归 |
+| 2025-11-04 | `env PYTHONPATH=src python3 -m pytest tests/data/test_symbols_pipeline.py` | ⚠️ 未执行 | 当前环境缺少 pytest，待依赖安装后重试 |
+| 2025-11-04 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/data/pipelines/symbols.py tests/data/test_symbols_pipeline.py` | ✅ 通过 | 新增降级逻辑与单测语法检查确保无语法错误 |
+| 2025-11-04 | `env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py` | ⚠️ 未执行 | 当前环境缺少 pytest，待依赖安装后重试 |

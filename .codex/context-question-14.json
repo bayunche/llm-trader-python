@@ -1,0 +1,33 @@
+{
+  "question": "当东方财富与交易所接口全部失败时，缓存兜底应如何正确读取 symbols.parquet 并返回记录？",
+  "priority": "high",
+  "reason": "当前 fetch() 在缓存分支保留占位代码与调试文本，未能返回任何记录，导致全流程在外部数据源失效时直接抛出 DataSourceError。",
+  "investigation_timestamp": "2025-11-04T16:37:25.443848+08:00",
+  "findings": [
+    {
+      "evidence": "fetch() 在东方财富与交易所均失败后仅调用 list_active_symbols 获取代码列表，随后进入未完成的 path_for 调用并残留 \"Wait******\" 调试文本，最终重新抛出 DataSourceError。",
+      "paths": [
+        "src/llm_trader/data/pipelines/symbols.py:78",
+        "src/llm_trader/data/pipelines/symbols.py:81",
+        "src/llm_trader/data/pipelines/symbols.py:88",
+        "src/llm_trader/data/pipelines/symbols.py:90"
+      ]
+    },
+    {
+      "evidence": "ParquetRepository.list_active_symbols 仅返回 symbol 字符串列表，未能提供完整记录，且其内部示例展示了通过 manager.path_for(DatasetKind.SYMBOLS, ensure_dir=False) 获取缓存文件路径并以 pq.read_table 读取。",
+      "paths": [
+        "src/llm_trader/data/repositories/parquet.py:39",
+        "src/llm_trader/data/repositories/parquet.py:47",
+        "src/llm_trader/data/repositories/parquet.py:50"
+      ]
+    },
+    {
+      "evidence": "DataStoreManager.path_for(DatasetKind.SYMBOLS, ensure_dir=False) 会定位 metadata/symbols.parquet，无需额外 dataset_kind 参数或自定义枚举查找，可直接复用。",
+      "paths": [
+        "src/llm_trader/data/storage.py:104",
+        "src/llm_trader/data/storage.py:126"
+      ]
+    }
+  ],
+  "conclusion": "缓存兜底应直接通过 manager.path_for(DatasetKind.SYMBOLS, ensure_dir=False) 定位 symbols.parquet，若文件存在则以 pq.read_table(path).to_pylist() 读取并经过 ensure_columns/drop_duplicates/drop_na 清洗后返回；若文件不存在再回退到 DataSourceError，从而保证无网情况下可继续流程。"
+}

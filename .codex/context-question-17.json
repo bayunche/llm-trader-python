@@ -1,0 +1,36 @@
+{
+  "question": "交易历史摘要需要包含哪些字段以支撑历史回溯，并与现有存储格式兼容？",
+  "priority": "high",
+  "reason": "需设计统一 schema 以同时呈现交易结果和大模型输入输出，保证仪表盘与 API 可直接消费。",
+  "investigation_timestamp": "2025-11-04T20:50:32.266225+08:00",
+  "findings": [
+    {
+      "evidence": "run_ai_trading_cycle 返回 dict，包含 `suggestion` (LLMStrategySuggestion)、`orders_executed`、`trades_filled`、`selected_symbols`、`quotes` 等信息；目前未返回 prompt/response，需要新增字段。",
+      "paths": [
+        "src/llm_trader/trading/orchestrator.py:186"
+      ]
+    },
+    {
+      "evidence": "LLMStrategySuggestion 由 description、rules、selected_symbols 组成，规则对象 RuleConfig 可序列化为纯 JSON；提示词与响应可通过 LLMStrategyGenerator.last_prompt/last_raw_response 获取。",
+      "paths": [
+        "src/llm_trader/strategy/llm_generator.py:68",
+        "src/llm_trader/strategy/engine.py:17"
+      ]
+    },
+    {
+      "evidence": "ParquetRepository 已在 `write_trading_orders/trades/equity` 中使用 `_merge_existing` 存储结构化数据；增加新的 DatasetKind 并存储 JSON 字段需序列化为字符串（如 `json.dumps`），以确保 PyArrow 可写入。",
+      "paths": [
+        "src/llm_trader/data/repositories/parquet.py:212",
+        "src/llm_trader/data/storage.py:224"
+      ]
+    },
+    {
+      "evidence": "仪表盘 `dashboard/data.py` 支持分页与缓存，读取 Parquet 记录后可直接 DataFrame 展示；为兼容现有逻辑，历史摘要应至少包含 timestamp、status、orders_executed、trades_filled、selected_symbols、suggestion_description、llm_prompt、llm_response。",
+      "paths": [
+        "dashboard/data.py:40",
+        "dashboard/app.py:200"
+      ]
+    }
+  ],
+  "conclusion": "历史摘要推荐以 Parquet 记录，字段包括：timestamp（datetime）、status/result（字符串）、decision_proceed（布尔）、orders_executed、trades_filled、selected_symbols（JSON 字符串）、rules（JSON 字符串）、suggestion_description、llm_prompt、llm_response、alerts（JSON 字符串）。这样便于 API/仪表盘直接读取并还原展示。"
+}

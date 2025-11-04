@@ -139,6 +139,8 @@ def test_run_ai_trading_cycle_executes_orders(tmp_path: Path, monkeypatch: pytes
     assert result["orders_executed"] >= 1
     assert result["trades_filled"] >= 1
     assert result["selected_symbols"] == ["600000.SH"]
+    assert result["llm_prompt"] == "fake prompt"
+    assert result["llm_response"] == json.dumps({"description": "demo", "rules": []})
 
     orders_path = manager.path_for(
         DatasetKind.TRADING_ORDERS,

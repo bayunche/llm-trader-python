@@ -11,12 +11,14 @@ from llm_trader.api.schemas import (
     TradingEquityResponse,
     TradingLogResponse,
     TradingOrderResponse,
+    TradingRunHistoryResponse,
     TradingTradeResponse,
 )
 from llm_trader.api.utils import (
     load_llm_logs,
     load_trading_equity,
     load_trading_orders,
+    load_trading_runs,
     load_trading_trades,
 )
 from llm_trader.api.security import require_api_key
@@ -62,4 +64,20 @@ async def list_trading_logs(
     limit: Optional[int] = Query(None, ge=1, le=1000),
 ) -> TradingLogResponse:
     records = load_llm_logs(strategy_id=strategy_id, session_id=session_id, limit=limit)
+    return success_response(records)
+
+
+@router.get("/history", response_model=TradingRunHistoryResponse, summary="查询交易历史摘要")
+async def list_trading_history(
+    strategy_id: str = Query(..., description="策略 ID"),
+    session_id: str = Query(..., description="会话 ID"),
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="返回条数上限"),
+    offset: int = Query(0, ge=0, description="从最早记录起跳过的条数"),
+) -> TradingRunHistoryResponse:
+    records = load_trading_runs(
+        strategy_id=strategy_id,
+        session_id=session_id,
+        limit=limit,
+        offset=offset,
+    )
     return success_response(records)

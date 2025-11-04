@@ -164,3 +164,25 @@ class TradingEquityResponse(APIResponse[List[TradingEquityItem]]):
 
 class TradingLogResponse(APIResponse[List[TradingLogItem]]):
     pass
+
+
+class TradingRunHistoryItem(BaseModel):
+    timestamp: datetime
+    status: str
+    decision_proceed: bool
+    alerts: List[str] = Field(default_factory=list)
+    orders_executed: int = 0
+    trades_filled: int = 0
+    selected_symbols: List[str] = Field(default_factory=list)
+    suggestion_description: Optional[str] = None
+    rules: List[Dict[str, object]] = Field(default_factory=list)
+    llm_prompt: Optional[str] = None
+    llm_response: Optional[str] = None
+    objective: Optional[str] = None
+    indicators: List[str] = Field(default_factory=list)
+    strategy_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class TradingRunHistoryResponse(APIResponse[List[TradingRunHistoryItem]]):
+    pass
