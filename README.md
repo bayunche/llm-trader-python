@@ -1,6 +1,6 @@
 # LLM Trader · A 股大模型自动交易框架
 
-> **执行者：Codex** ｜ **最后更新：2025-11-04**  
+> **执行者：Codex** ｜ **最后更新：2025-11-05**  
 > 面向数据驱动的量化团队，提供“行情采集 → 策略生成 → 风险控制 → 执行复盘 → 仪表盘”一站式流水线。
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](#-快速开始) 
@@ -109,6 +109,7 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
    - 首次启动会立即执行一次自动交易循环；
    - 后续由 APScheduler 根据 `config/scheduler.prod.json` 的设置每 5 分钟触发一次 `managed-trading` 任务；
    - Streamlit 仪表盘会自动在 `DASHBOARD_PORT`（默认 8501）监听，可通过 `LLM_TRADER_SCHEDULER_CONFIG` 指定其他调度配置，或设置 `LLM_TRADER_SKIP_INITIAL_PIPELINE=1` 跳过首次全量执行。
+   - 调度任务 `run_cycle` 会与全流程脚本一致写入 `trading_runs` 摘要，包含大模型 Prompt/Response、风控结论等信息，供仪表盘新标签实时查看。
 
 2. （可选）如仅需执行一次而不启动调度器，可继续使用原脚本：  
 
@@ -152,7 +153,7 @@ python scripts/run_ai_trading_cycle.py \
 conda run -n llm-trader streamlit run dashboard/app.py
 ```
 
-访问 `http://localhost:8501`，查看实时交易看板、成交分布/趋势图、资金曲线对比、订单/成交流水以及提示词管理等。
+访问 `http://localhost:8501`，界面包含四个标签：**提示词管理**、**实时交易**、**自动交易历史** 与 **自动交易调用日志**。第四个标签聚合最新写入的 `trading_runs` 记录，可按策略/会话筛选并查看完整的 Prompt / Response，点击“刷新调用日志”按钮即可清除缓存并加载最新调度结果。
 
 ### 5. 查询历史摘要
 

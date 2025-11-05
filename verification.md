@@ -29,3 +29,5 @@
 | 2025-11-04 | `env PYTHONPATH=src python3 -m pytest tests/data/test_symbols_pipeline.py` | ⚠️ 未执行 | 当前环境缺少 pytest，待依赖安装后重试 |
 | 2025-11-04 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/data/pipelines/symbols.py tests/data/test_symbols_pipeline.py` | ✅ 通过 | 新增降级逻辑与单测语法检查确保无语法错误 |
 | 2025-11-04 | `env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py` | ⚠️ 未执行 | 当前环境缺少 pytest，待依赖安装后重试 |
+| 2025-11-05 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/pipeline/auto.py src/llm_trader/tasks/managed_cycle.py dashboard/app.py` | ✅ 通过 | 交易摘要与自动交易调用日志改造完成后的语法检查 |
+| 2025-11-05 | `env PYTHONPATH=src python3 -m pytest tests/dashboard/test_data_access.py` | ⚠️ 未执行 | 当前环境缺少 pytest，无法验证；需在具备依赖的环境补跑 |

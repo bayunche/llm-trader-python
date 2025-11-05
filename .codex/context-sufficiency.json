@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "已明确交易历史摘要需提供 timestamp/status/orders/trades/LLM prompt|response 等字段，并通过新增 API schema 暴露。"
+    "notes": "《项目需求.md》第5-7章明确了 Observation、Decision、Risk Gate、执行、审计与管理接口的输入输出字段，可据此定义服务契约与 API/事件模型。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "计划使用现有 ParquetRepository 扩展 DatasetKind 并存储 JSON 字符串，无需引入额外依赖。"
+    "notes": "确认以 Python 3.10、FastAPI、Streamlit 继续实现业务层，存储改为 PostgreSQL（取代 Parquet/DuckDB），并结合 SQLModel/SQLAlchemy 处理 ORM 与迁移。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "风险点：重复写入导致历史数据被覆盖；需要确保 `_merge_existing` 去重逻辑正确，且 JSON 序列化不会超出 Parquet 字段限制。"
+    "notes": "全面重构涉及数据迁移、服务拆分、实时风控与执行一致性；需防止 Actor/Checker 超时、数据库热点、容器编排复杂度及统一启动失败。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "将编写仓储写入与 API 读取单元测试，使用 curl/pytest 模拟请求验证模型日志与交易记录能同时返回。"
+    "notes": "计划构建分层测试：数据库迁移与仓储单测、Actor/Checker/Risk Gate 流程集成测试、API 与仪表盘冒烟；通过 docker-compose 集成 PG，使用 pytest 完整执行。"
   },
   "status": "ready_for_planning"
 }

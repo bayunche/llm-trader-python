@@ -9,12 +9,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from llm_trader.common import get_logger
+from llm_trader.common import create_redis_client, get_logger
 from llm_trader.config import get_settings
-from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
-from llm_trader.data.pipelines.symbols import SymbolsPipeline
+from llm_trader.data.ingestion import DataIngestionService
 from llm_trader.data.pipelines.ohlcv import OhlcvPipeline
 from llm_trader.data.repositories.parquet import ParquetRepository
+from llm_trader.db.session import create_session_factory
+from llm_trader.observation import ObservationBuilder
 from llm_trader.pipeline.auto import AutoTradingConfig, AutoTradingResult, BacktestCriteria, run_full_automation
 from llm_trader.trading.orchestrator import TradingCycleConfig, resolve_candidate_symbols
 from llm_trader.monitoring import AlertEmitter
@@ -23,19 +24,30 @@ LOGGER = get_logger("scripts.full_pipeline")
 STATUS_FILENAME = "status.json"
 
 
-def _sync_data(repository: ParquetRepository) -> None:
-    """执行数据同步阶段。"""
+def _sync_data(
+    repository: ParquetRepository,
+    ingestion: DataIngestionService,
+    observation_builder: ObservationBuilder,
+) -> tuple[List[Dict[str, object]], str]:
+    """执行数据同步阶段，写入 PostgreSQL 与 Parquet，并生成最新观测。"""
 
     settings = get_settings().trading
     LOGGER.info("开始同步证券主表")
-    SymbolsPipeline(repository=repository).sync()
+    master_records = ingestion.sync_master_symbols()
+    repository.write_symbols(master_records)
+
     LOGGER.info("开始同步实时行情")
-    use_manual_symbols = bool(settings.symbols)
-    quotes_pipeline = RealtimeQuotesPipeline(
-        repository=repository,
-        symbols_limit=settings.symbol_universe_limit if use_manual_symbols else None,
+    quotes = ingestion.sync_realtime_quotes(settings.symbols or None)
+    repository.write_realtime_quotes(quotes)
+
+    observation_payload = observation_builder.build()
+    LOGGER.info(
+        "观测构建完成",
+        extra={
+            "observation_id": observation_payload.observation_id,
+            "universe": len(observation_payload.universe),
+        },
     )
-    quotes = quotes_pipeline.sync(settings.symbols or None)
 
     temp_config = TradingCycleConfig(
         session_id=settings.session_id,
@@ -57,7 +69,8 @@ def _sync_data(repository: ParquetRepository) -> None:
     symbols = resolve_candidate_symbols(temp_config, quotes)
     if not symbols:
         LOGGER.warning("历史行情同步跳过：未找到候选标的")
-        return
+        return quotes, observation_payload.observation_id
+
     ohlcv_pipeline = OhlcvPipeline(repository=repository)
     now = datetime.utcnow()
     history_start = (now - timedelta(days=max(settings.lookback_days, 1))).date()
@@ -79,6 +92,7 @@ def _sync_data(repository: ParquetRepository) -> None:
                 "历史行情同步失败",
                 extra={"symbol": symbol, "freq": settings.freq, "error": str(exc)},
             )
+    return quotes, observation_payload.observation_id
 
 
 def _build_auto_config() -> AutoTradingConfig:
@@ -171,6 +185,20 @@ class PipelineController:
         self._status_path = base_dir / status_filename
         self._status = PipelineStatus(execution_mode=self._settings.trading.execution_mode)
         self._alert = AlertEmitter(channel=self._settings.monitoring.channel)
+        self._session_factory = create_session_factory()
+        self._redis_client = create_redis_client()
+        self._data_service = DataIngestionService(
+            session_factory=self._session_factory,
+            symbol_universe_limit=self._settings.trading.symbol_universe_limit,
+        )
+        self._observation_builder = ObservationBuilder(
+            session_factory=self._session_factory,
+            redis_client=self._redis_client,
+            valid_ttl_ms=self._settings.trading.observation_ttl_ms,
+            symbol_universe_limit=self._settings.trading.symbol_universe_limit,
+        )
+        self._latest_quotes: List[Dict[str, object]] = []
+        self._latest_observation_id: Optional[str] = None
 
     def run(self) -> PipelineStatus:
         """执行全流程并返回状态快照。"""
@@ -207,14 +235,26 @@ class PipelineController:
     def _run_data_sync(self) -> None:
         started = self._now()
         try:
-            _sync_data(self._repository)
+            quotes, observation_id = _sync_data(
+                self._repository,
+                self._data_service,
+                self._observation_builder,
+            )
+            self._latest_quotes = quotes
+            self._latest_observation_id = observation_id
         except Exception as exc:  # pragma: no cover - 异常路径留给冒烟验证
             LOGGER.exception("数据同步失败", extra={"error": str(exc)})
             self._add_stage("data_sync", "failed", str(exc), started)
             self._alert.emit("数据同步失败", details={"error": str(exc)})
             return
 
-        self._add_stage("data_sync", "success", "证券主表与实时行情同步完成", started)
+        metrics = self._observation_builder.cache_metrics
+        detail = (
+            "证券主表、实时行情与观测同步完成"
+            f"（observation={self._latest_observation_id}, cache_hits={metrics['hits']},"
+            f" cache_misses={metrics['misses']})"
+        )
+        self._add_stage("data_sync", "success", detail, started)
 
     def _run_auto_trading(self) -> None:
         auto_cfg = _build_auto_config()
@@ -228,7 +268,11 @@ class PipelineController:
         )
         started = self._now()
         try:
-            result = run_full_automation(auto_cfg)
+            result = run_full_automation(
+                auto_cfg,
+                quotes=self._latest_quotes or None,
+                observation_id=self._latest_observation_id,
+            )
         except Exception as exc:  # pragma: no cover - 异常路径留给冒烟验证
             LOGGER.exception("自动交易执行失败", extra={"error": str(exc)})
             self._add_stage("auto_trading", "failed", str(exc), started)

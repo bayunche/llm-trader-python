@@ -7,7 +7,7 @@ import math
 import os
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import altair as alt
 import pandas as pd
@@ -314,7 +314,12 @@ def main() -> None:
     st.title("LLM Trader 交易仪表盘")
 
     _render_pipeline_status()
-    prompt_tab, trading_tab, history_tab = st.tabs(["提示词管理", "实时交易", "自动交易历史"])
+    prompt_tab, trading_tab, history_tab, automation_tab = st.tabs([
+        "提示词管理",
+        "实时交易",
+        "自动交易历史",
+        "自动交易调用日志",
+    ])
 
     available_pairs = data.list_strategy_sessions()
     if available_pairs:
@@ -534,6 +539,135 @@ def main() -> None:
         _render_history(strategy, session)
         st.markdown("### 模型调用日志")
         _render_llm_logs(strategy, session)
+
+    with automation_tab:
+        if not available_pairs:
+            st.info("暂无交易数据，请先运行自动交易循环。")
+            return
+
+        st.markdown("### 自动交易调用日志总览")
+        col_refresh, col_limit = st.columns([1, 1])
+        with col_refresh:
+            if st.button("刷新调用日志", key="refresh-automation-logs"):
+                data.invalidate_cache()
+                st.experimental_rerun()
+        with col_limit:
+            limit_options = [10, 20, 50, 100]
+            selected_limit = st.selectbox("展示最近条数", limit_options, index=1, key="automation-limit")
+
+        option_labels = [f"{item['strategy_id']}/{item['session_id']}" for item in available_pairs]
+        selected_scope = st.multiselect(
+            "筛选策略/会话",
+            option_labels,
+            default=option_labels,
+            key="automation-scope",
+        )
+        if not selected_scope:
+            st.warning("请至少选择一个策略/会话组合以查看记录")
+            return
+
+        filtered_pairs = [
+            pair for pair, label in zip(available_pairs, option_labels) if label in selected_scope
+        ]
+        aggregated_runs: List[Dict[str, object]] = []
+        for pair in filtered_pairs:
+            strategy_id = pair["strategy_id"]
+            session_id = pair["session_id"]
+            history_records = data.get_history(strategy_id, session_id, limit=selected_limit)
+            for record in history_records:
+                aggregated_runs.append(
+                    {
+                        "strategy_id": strategy_id,
+                        "session_id": session_id,
+                        "timestamp": record.get("timestamp"),
+                        "status": record.get("status"),
+                        "decision_proceed": record.get("decision_proceed"),
+                        "orders_executed": record.get("orders_executed"),
+                        "trades_filled": record.get("trades_filled"),
+                        "selected_symbols": record.get("selected_symbols", []),
+                        "suggestion_description": record.get("suggestion_description"),
+                        "alerts": record.get("alerts", []),
+                        "llm_prompt": record.get("llm_prompt"),
+                        "llm_response": record.get("llm_response"),
+                    }
+                )
+
+        if not aggregated_runs:
+            st.info("尚未记录任何自动交易调用日志。")
+            return
+
+        aggregated_runs.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+        limited_runs = aggregated_runs[:selected_limit]
+        display_df = pd.DataFrame(limited_runs)
+        display_df["timestamp"] = pd.to_datetime(display_df["timestamp"])
+        display_df = display_df.sort_values("timestamp", ascending=False)
+        display_df["selected_symbols"] = display_df["selected_symbols"].apply(
+            lambda items: ", ".join(items) if isinstance(items, list) else items
+        )
+        display_df["alerts"] = display_df["alerts"].apply(
+            lambda items: "；".join(items) if isinstance(items, list) else items
+        )
+        display_df["prompt_preview"] = display_df["llm_prompt"].apply(lambda text: (text or "")[:80])
+        display_df["response_preview"] = display_df["llm_response"].apply(lambda text: (text or "")[:80])
+        st.dataframe(
+            display_df[
+                [
+                    "timestamp",
+                    "strategy_id",
+                    "session_id",
+                    "status",
+                    "decision_proceed",
+                    "orders_executed",
+                    "trades_filled",
+                    "selected_symbols",
+                    "prompt_preview",
+                    "response_preview",
+                ]
+            ],
+            use_container_width=True,
+        )
+        st.download_button(
+            "下载调用日志 CSV",
+            display_df.to_csv(index=False).encode("utf-8"),
+            file_name="automation_llm_logs.csv",
+        )
+
+        detail_labels = [
+            f"{row['timestamp']} | {row['strategy_id']}/{row['session_id']}" for row in limited_runs
+        ]
+        detail_map = {label: row for label, row in zip(detail_labels, limited_runs)}
+        selected_detail = st.selectbox(
+            "选择记录查看详情",
+            detail_labels,
+            index=0,
+            key="automation-detail-select",
+        )
+        detail = detail_map[selected_detail]
+        st.markdown(
+            f"**时间**：{detail['timestamp']} ｜ **策略**：{detail['strategy_id']} ｜ **会话**：{detail['session_id']}"
+        )
+        st.markdown(
+            f"**状态**：{detail.get('status', '未知')} ｜ **风控**："
+            + ("✅ 通过" if detail.get("decision_proceed") else "⛔ 阻断")
+        )
+        st.markdown(
+            f"**订单/成交**：{detail.get('orders_executed', 0)} / {detail.get('trades_filled', 0)}"
+        )
+        selected_symbols = detail.get("selected_symbols") or []
+        st.markdown(
+            f"**选股**：{', '.join(selected_symbols) if selected_symbols else '无'}"
+        )
+        description = detail.get("suggestion_description")
+        if description:
+            st.markdown(f"**策略说明**：{description}")
+        alerts = detail.get("alerts") or []
+        if alerts:
+            st.warning("；".join(alerts))
+        with st.expander("Prompt", expanded=False):
+            st.code(detail.get("llm_prompt", ""), language="markdown")
+        with st.expander("Response", expanded=False):
+            st.code(detail.get("llm_response", ""), language="json")
+        st.caption("使用上方刷新按钮可强制清除缓存并获取最新记录。")
 
 
 if __name__ == "__main__":

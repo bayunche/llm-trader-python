@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
 import pytest
@@ -178,6 +178,83 @@ def test_run_ai_trading_cycle_executes_orders(tmp_path: Path, monkeypatch: pytes
     entry = json.loads(lines[-1])
     assert entry["objective"] == "获取日内收益"
     assert "prompt" in entry
+
+
+def test_run_ai_trading_cycle_uses_provided_quotes(monkeypatch: pytest.MonkeyPatch) -> None:
+    history = [
+        {
+            "symbol": "600000.SH",
+            "dt": datetime(2024, 1, 1, 9, 30),
+            "freq": "D",
+            "open": 10.0,
+            "high": 10.2,
+            "low": 9.8,
+            "close": 10.1,
+            "volume": 100000,
+            "amount": 1000000,
+        }
+    ]
+
+    def fake_load(symbols, freq, start, end):
+        return history
+
+    generator = FakeGenerator(
+        [
+            RuleConfig(
+                indicator="sma",
+                column="close",
+                params={"window": 1},
+                operator=">",
+                threshold=9.0,
+            )
+        ]
+    )
+
+    class RecordingPipeline(FakeRealtimePipeline):
+        def __init__(self, quotes: List[Dict[str, object]]) -> None:
+            super().__init__(quotes)
+            self.calls: List[Optional[Sequence[str]]] = []
+
+        def sync(self, symbols: Sequence[str]) -> List[Dict[str, object]]:
+            self.calls.append(tuple(symbols) if symbols is not None else None)
+            return super().sync(symbols or [])
+
+    pipeline = RecordingPipeline(
+        [
+            {
+                "symbol": "600000.SH",
+                "last_price": 10.5,
+                "change_ratio": 1.2,
+                "turnover_rate": 3.5,
+            }
+        ]
+    )
+    session = TradingSession(TradingSessionConfig(session_id="session", strategy_id="strategy"))
+
+    result = run_ai_trading_cycle(
+        TradingCycleConfig(
+            session_id="session",
+            strategy_id="strategy",
+            symbols=["600000.SH"],
+            objective="目标",
+            indicators=("sma",),
+        ),
+        generator=generator,
+        trading_session=session,
+        realtime_pipeline=pipeline,
+        load_ohlcv_fn=fake_load,
+        quotes=[
+            {
+                "symbol": "600000.SH",
+                "last_price": 10.5,
+                "change_ratio": 1.2,
+                "turnover_rate": 3.5,
+            }
+        ],
+    )
+
+    assert result["quotes"]
+    assert pipeline.calls == []
 
 
 def test_run_ai_trading_cycle_live_mode_raises(tmp_path: Path) -> None:

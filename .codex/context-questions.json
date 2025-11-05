@@ -1,13 +1,15 @@
 {
   "known": [
-    "SymbolsPipeline 已实现多级降级并可落盘缓存；TradingSession 在有成交时写入订单、成交与权益；LLMStrategyLogRepository 会把 prompt/response 追加到 JSONL，仪表盘可读取。",
-    "当前没有统一的交易循环历史表，仪表盘依赖实时读取 Parquet/JSONL，若无订单则缺乏可视化数据。"
+    "run_full_automation 已在交易执行后写入 trading_runs parquet，记录 prompt/response 等字段。",
+    "调度器任务 run_cycle 仍停留在日志输出，未复用上述写入逻辑，因此触发的自动交易无法在仪表盘历史页呈现。",
+    "仪表盘主页面只有三个标签，新标签缺位导致用户无法快速定位自动交易大模型调用详情。",
+    "dashboard.data 已提供 get_history/get_recent_llm_logs 等函数，可复用以构建独立视图。"
   ],
   "unknown": [
-    "高优先级：应在全链路哪个阶段记录交易历史摘要，以保证在无订单或成交时仍能保留一次循环的输入/输出？",
-    "高优先级：交易历史摘要需要包含哪些字段（策略 ID、session、LLM prompt/response、selected symbols、orders/trades 统计等），如何与现有数据格式（Parquet/JSONL）兼容？",
-    "中优先级：新增的历史数据需如何通过 FastAPI 与 Dashboard 暴露，是否需要新的 endpoint 或复用现有 `/api/trading/logs`？",
-    "中优先级：如何避免与现有日志/报表重复存储，同时保持数据可分页查询？"
+    "高优先级：在调度路径中调用哪段代码最合适以复用 trading_runs 写入逻辑，避免重复实现？",
+    "高优先级：新增的自动交易调用日志 tab 需要展示哪些字段（如 prompt、response、风控结论、选股列表），是否需额外聚合？",
+    "中优先级：缓存命中后新写入的 trading_runs 是否会被仪表盘立即读取，是否需要在界面层触发 invalidate_cache？",
+    "低优先级：是否需要为新标签添加导出功能或按策略/会话过滤的默认选项？"
   ],
-  "notes": "后续深挖将聚焦记录落点与数据结构设计；完成方案后需同步 API、Dashboard 以及文档。"
+  "notes": "接下来重点验证 run_ai_trading_cycle 返回结构是否始终包含 config 与 LLM 字段，并在设计仪表盘新 tab 时考虑缓存刷新提示。"
 }

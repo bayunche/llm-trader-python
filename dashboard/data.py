@@ -6,7 +6,7 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from llm_trader.api.utils import (
     load_llm_logs,
@@ -275,16 +275,35 @@ def list_strategy_sessions() -> List[Dict[str, str]]:
     """获取策略与会话映射列表。"""
 
     manager = default_manager()
-    orders_config = manager.get(DatasetKind.TRADING_ORDERS)
-    base = manager.base_dir / orders_config.relative_dir
     results: List[Dict[str, str]] = []
-    if not base.exists():
-        return results
-    for session_dir in sorted(base.glob("session=*")):
-        session_id = session_dir.name.split("=", 1)[1]
-        for strategy_dir in sorted(session_dir.glob("strategy=*")):
+    seen: Set[Tuple[str, str]] = set()
+
+    def _append(strategy_id: str, session_id: str) -> None:
+        key = (strategy_id, session_id)
+        if key in seen:
+            return
+        seen.add(key)
+        results.append({"strategy_id": strategy_id, "session_id": session_id})
+
+    orders_config = manager.get(DatasetKind.TRADING_ORDERS)
+    base_orders = manager.base_dir / orders_config.relative_dir
+    if base_orders.exists():
+        for session_dir in sorted(base_orders.glob("session=*")):
+            session_id = session_dir.name.split("=", 1)[1]
+            for strategy_dir in sorted(session_dir.glob("strategy=*")):
+                strategy_id = strategy_dir.name.split("=", 1)[1]
+                _append(strategy_id, session_id)
+
+    runs_config = manager.get(DatasetKind.TRADING_RUNS)
+    base_runs = manager.base_dir / runs_config.relative_dir
+    if base_runs.exists():
+        for strategy_dir in sorted(base_runs.glob("strategy=*")):
             strategy_id = strategy_dir.name.split("=", 1)[1]
-            results.append({"strategy_id": strategy_id, "session_id": session_id})
+            for session_dir in sorted(strategy_dir.glob("session=*")):
+                session_id = session_dir.name.split("=", 1)[1]
+                _append(strategy_id, session_id)
+
+    results.sort(key=lambda item: (item["strategy_id"], item["session_id"]))
     return results
 
 

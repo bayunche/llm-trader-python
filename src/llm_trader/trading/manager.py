@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from llm_trader.config import get_settings
 from llm_trader.data import DatasetKind, default_manager
@@ -28,6 +28,8 @@ def run_managed_trading_cycle(
     *,
     policy: Optional[RiskPolicy] = None,
     trading_session: Optional[TradingSession] = None,
+    quotes: Optional[List[Dict[str, object]]] = None,
+    observation_id: Optional[str] = None,
     **kwargs: Any,
 ) -> ManagedTradingResult:
     """运行带风险控制的交易循环。"""
@@ -46,7 +48,13 @@ def run_managed_trading_cycle(
             sector_lookup=sector_lookup,
         )
 
-    result = run_ai_trading_cycle(config, trading_session=trading_session, **kwargs)
+    result = run_ai_trading_cycle(
+        config,
+        trading_session=trading_session,
+        quotes=quotes,
+        observation_id=observation_id,
+        **kwargs,
+    )
     session: TradingSession = result["session"]
     equity_curve = session.account.equity_curve
     positions = session.snapshot_positions()

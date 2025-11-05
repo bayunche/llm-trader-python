@@ -1,0 +1,24 @@
+{
+  "question": "调度任务 run_cycle 是否能够复用现有交易摘要写入逻辑？",
+  "priority": "high",
+  "reason_to_investigate": "用户反馈自动调度后的大模型调用记录未在仪表盘展示，怀疑调度路径未落盘 trading_runs。",
+  "findings": [
+    {
+      "file": "src/llm_trader/tasks/managed_cycle.py",
+      "lines": "18-55",
+      "summary": "run_cycle 调用 run_managed_trading_cycle 后仅输出日志，没有任何写入仓储的调用。"
+    },
+    {
+      "file": "src/llm_trader/pipeline/auto.py",
+      "lines": "34-118, 186-226",
+      "summary": "自动化管道在 run_managed_trading_cycle 返回后会调用 _record_trading_history 写入 trading_runs，包括 prompt/response、选股、风控结论等字段。"
+    },
+    {
+      "file": "src/llm_trader/trading/orchestrator.py",
+      "lines": "32-146",
+      "summary": "run_ai_trading_cycle 在返回结果中包含 suggestion、llm_prompt、llm_response、selected_symbols 以及派生 config，可用于构建历史摘要。"
+    }
+  ],
+  "conclusion": "调度任务缺少历史摘要写入，需将 pipeline.auto 中的记录逻辑抽取为公共函数，并在 run_cycle 调用。run_ai_trading_cycle 的返回数据足以支撑写入。",
+  "next_steps": "重命名并导出 pipeline.auto._record_trading_history，确保调度任务与自动化脚本共享同一实现；更新仪表盘前确保调度路径开始写入。"
+}

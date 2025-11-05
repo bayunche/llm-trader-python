@@ -1,0 +1,29 @@
+{
+  "question": "根据《项目需求.md》，PostgreSQL 需要支持哪些核心实体与字段？",
+  "priority": "high",
+  "reason_to_investigate": "新需求强制迁移至 PostgreSQL，必须先梳理观测、决策、订单、成交、审计、配置等数据结构，才能设计数据库 schema 与存储层。",
+  "findings": [
+    {
+      "file": "项目需求.md",
+      "lines": "121-260",
+      "summary": "第5.1-5.4 节详细定义 Observation、Decision(Action)、Checker、Risk Gate 的字段，包括时间戳、有效期、标的列表、风控结果等；这些应映射为 observations、decisions、decision_actions、checker_results、risk_results 等表。"
+    },
+    {
+      "file": "项目需求.md",
+      "lines": "200-320",
+      "summary": "第5.5 节定义订单与成交字段（order_id、client_order_id、状态机要求、fills），说明需要订单表和成交表，并保持状态变迁和幂等键。"
+    },
+    {
+      "file": "项目需求.md",
+      "lines": "320-420",
+      "summary": "第5.6-5.9 节描述决策总账、模型调用审计、主表、绩效/账户快照字段，表明需建立 decision_ledger、llm_call_audit、master_universe、performance_snapshots 等表，并保证可追溯性与统计维度。"
+    },
+    {
+      "file": "项目需求.md",
+      "lines": "420-520",
+      "summary": "第6.1-6.3 节为配置中心提供模型端点、提示词模板、风控参数的数据结构，意味着数据库需要版本化配置表，并保存审计信息（created_by/updated_by、版本号、灰度状态等）。"
+    }
+  ],
+  "conclusion": "PostgreSQL 需覆盖观测、决策、动作、风控结果、订单/成交、决策总账、模型调用日志、主表、绩效快照、配置管理等十余类实体，并支持版本化与审计字段。存储层必须提供事务一致性和幂等写入以满足追溯与风控要求。",
+  "next_steps": "绘制实体关系图，划分 schema（如 core、risk、config、report），制定迁移初稿；在规划阶段列出访问模式与索引需求，为 ORM/SQLModel 适配做准备。"
+}

@@ -66,6 +66,8 @@ def run_ai_trading_cycle(
     trading_session: Optional[TradingSession] = None,
     realtime_pipeline: Optional[RealtimeQuotesPipeline] = None,
     log_repository: Optional[LLMStrategyLogRepository] = None,
+    quotes: Optional[Sequence[Dict[str, object]]] = None,
+    observation_id: Optional[str] = None,
     load_ohlcv_fn=load_ohlcv,
 ) -> Dict[str, object]:
     """执行一次完整的 AI 交易循环并返回执行详情。"""
@@ -76,7 +78,7 @@ def run_ai_trading_cycle(
     )
     universe_symbols = config.symbols if use_manual_symbols else None
 
-    quotes_universe = pipeline.sync(universe_symbols)
+    quotes_universe = list(quotes) if quotes is not None else pipeline.sync(universe_symbols)
     if not quotes_universe:
         raise ValueError("未获取到实时行情数据")
 
@@ -84,11 +86,18 @@ def run_ai_trading_cycle(
     if not candidate_symbols:
         raise ValueError("选股逻辑未返回任何标的")
 
-    selected_set = set(candidate_symbols)
-    quotes = [item for item in quotes_universe if item.get("symbol") in selected_set]
-    if len(quotes) < len(candidate_symbols):
-        quotes = pipeline.sync(candidate_symbols)
-    summary = _summarize_quotes(quotes)
+    quotes_map = {item.get("symbol"): item for item in quotes_universe if item.get("symbol")}
+    initial_quotes = [quotes_map[symbol] for symbol in candidate_symbols if symbol in quotes_map]
+    if len(initial_quotes) < len(candidate_symbols):
+        missing_symbols = [symbol for symbol in candidate_symbols if symbol not in quotes_map]
+        if missing_symbols:
+            fetched = pipeline.sync(missing_symbols)
+            for item in fetched:
+                symbol = item.get("symbol")
+                if symbol:
+                    quotes_map[symbol] = item
+            initial_quotes = [quotes_map[symbol] for symbol in candidate_symbols if symbol in quotes_map]
+    summary = _summarize_quotes(initial_quotes)
 
     if generator is None:
         template_manager = PromptTemplateManager()
@@ -137,11 +146,20 @@ def run_ai_trading_cycle(
                 "indicators": list(config.indicators),
                 "quotes_summary": summary,
                 "selected_symbols": pipeline_symbols,
+                "observation_id": observation_id,
             },
         )
 
-    if pipeline_symbols != candidate_symbols:
-        quotes = pipeline.sync(pipeline_symbols)
+    quotes = [quotes_map[symbol] for symbol in pipeline_symbols if symbol in quotes_map]
+    if len(quotes) < len(pipeline_symbols):
+        missing = [symbol for symbol in pipeline_symbols if symbol not in quotes_map]
+        if missing:
+            extra = pipeline.sync(missing)
+            for item in extra:
+                symbol = item.get("symbol")
+                if symbol:
+                    quotes_map[symbol] = item
+            quotes = [quotes_map[symbol] for symbol in pipeline_symbols if symbol in quotes_map]
 
     adapter = create_execution_adapter(getattr(config, "execution_mode", "sandbox"))
     session = trading_session or TradingSession(
@@ -189,6 +207,7 @@ def run_ai_trading_cycle(
         "suggestion": suggestion,
         "llm_prompt": last_prompt,
         "llm_response": last_raw,
+        "observation_id": observation_id,
         "quotes": quotes,
         "orders_executed": sum(len(v) for v in orders_by_dt.values()),
         "trades_filled": len(executed_trades),

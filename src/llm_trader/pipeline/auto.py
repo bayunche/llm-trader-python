@@ -61,11 +61,18 @@ def run_full_automation(
     config: AutoTradingConfig,
     *,
     trading_session=None,
+    quotes: Optional[List[Dict[str, object]]] = None,
+    observation_id: Optional[str] = None,
     load_ohlcv_fn=load_ohlcv,
 ) -> AutoTradingResult:
     """执行从策略生成到风险控制的全链路流程。"""
 
-    trading_result = run_ai_trading_cycle(config.trading, trading_session=trading_session)
+    trading_result = run_ai_trading_cycle(
+        config.trading,
+        trading_session=trading_session,
+        quotes=quotes,
+        observation_id=observation_id,
+    )
     suggestion = trading_result["suggestion"]
     derived_config: TradingCycleConfig = trading_result.get("config", config.trading)
 
@@ -101,10 +108,12 @@ def run_full_automation(
     managed = run_managed_trading_cycle(
         derived_config,
         trading_session=trading_result["session"],
+        quotes=trading_result.get("quotes"),
+        observation_id=observation_id or trading_result.get("observation_id"),
     )
     status = "executed" if managed.decision.proceed else "risk_blocked"
     try:
-        _record_trading_history(derived_config, managed, status)
+        record_trading_run_summary(derived_config, managed, status)
     except Exception as exc:  # pragma: no cover - 历史记录失败不影响主流程
         _LOGGER.warning("记录交易历史摘要失败", extra={"error": str(exc)})
     report_paths: Optional[Dict[str, Path]] = None
@@ -184,15 +193,18 @@ __all__ = [
     "BacktestCriteria",
     "AutoTradingConfig",
     "AutoTradingResult",
+    "record_trading_run_summary",
     "run_full_automation",
 ]
 
 
-def _record_trading_history(
+def record_trading_run_summary(
     config: TradingCycleConfig,
     managed: ManagedTradingResult,
     status: str,
 ) -> None:
+    """将单次交易循环的核心信息写入历史摘要。"""
+
     repo = ParquetRepository()
     raw = managed.raw_result or {}
     suggestion = raw.get("suggestion")

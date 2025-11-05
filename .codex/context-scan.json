@@ -1,117 +1,123 @@
 {
-  "scan_timestamp": "2025-11-04T20:49:00.477853+08:00",
+  "scan_timestamp": "2025-11-05T13:48:28+08:00",
   "areas": [
     {
-      "name": "证券主表采集与降级路径",
+      "name": "现有端到端管线与模块划分",
       "locations": [
-        "src/llm_trader/data/pipelines/symbols.py",
-        "src/llm_trader/data/repositories/parquet.py",
+        "src/llm_trader/pipeline/auto.py",
+        "src/llm_trader/trading",
         "scripts/run_full_pipeline.py"
       ],
-      "current_state": "SymbolsPipeline 依次尝试东方财富 push2 多个子域抓取全量证券主表，失败后回退至上交所/深交所接口。近期改造引入 HTTP header/多端点及缓存兜底，但 `_fetch_szse` 响应结构为 list 时触发 AttributeError，且 `fetch()` 在降级读取本地 `symbols.parquet` 时仍遗留调试 placeholder，未真正返回缓存，造成 DataSourceError。",
+      "current_state": "当前项目沿用旧版 LLM Trader 框架，数据采集、策略、风控、交易执行分散在多个子包内；run_full_pipeline 对应整套流程但与项目需求中的 Actor/Checker/Risk Gate 分层不完全一致，缺少面向决策链路的显式边界。",
       "similar_cases": [
-        "tests/data/test_symbols_pipeline.py",
-        "tests/pipeline/test_full_pipeline.py"
+        "tests/pipeline/test_auto.py",
+        "tests/tasks/test_managed_cycle.py",
+        "docs/architecture.md"
       ],
       "tech_stack": [
         "Python 3.10",
-        "httpx",
-        "tenacity",
-        "PyArrow Parquet"
+        "APScheduler",
+        "PyArrow",
+        "pandas"
       ],
       "tests": [
-        "tests/data/test_symbols_pipeline.py"
+        "tests/pipeline/test_auto.py",
+        "tests/tasks/test_managed_cycle.py"
       ],
-      "notes": "需要增强深交所返回值解析和缓存兜底逻辑，确保全流程在外部接口波动时仍能继续。"
+      "notes": "全面重构需按照《项目需求.md》重建 Actor-Checker-Risk Gate-Execution 链条，现有 orchestrator 逻辑只能作为参考，不能直接复用。"
     },
     {
-      "name": "候选标的自动筛选",
+      "name": "数据与存储层",
       "locations": [
-        "src/llm_trader/trading/orchestrator.py",
-        "src/llm_trader/pipeline/auto.py"
+        "src/llm_trader/data",
+        "data_store",
+        "docs/data_store.md"
       ],
-      "current_state": "TradingOrchestrator 自动从仓储读取最新证券主表并按成交额等指标筛选标的；若 `symbols.parquet` 缺失则依赖符合同步流程的成功执行。",
+      "current_state": "数据落地依赖本地 Parquet/DuckDB，账户、风险、行情等快照存储分散，多数仓储封装在 ParquetRepository；新需求要求决策总账、观测、订单、成交等全部进入 PostgreSQL 并支持在线热更新。",
       "similar_cases": [
-        "tests/trading/test_orchestrator.py"
+        "tests/data",
+        "tests/reports",
+        "docs/schema.md"
       ],
       "tech_stack": [
-        "Python 3.10",
-        "pandas",
-        "dataclasses"
+        "DuckDB",
+        "PyArrow",
+        "pandas"
       ],
       "tests": [
-        "tests/trading/test_orchestrator.py"
-      ],
-      "notes": "符号列表回退路径需与 symbols pipeline 修复同步验证。"
-    },
-    {
-      "name": "历史行情与实时展示",
-      "locations": [
-        "src/llm_trader/data/pipelines/ohlcv.py",
-        "dashboard/app.py",
-        "docs/realtime_data.md"
-      ],
-      "current_state": "行情管道支持历史与实时数据落地，Streamlit 仪表盘提供实时交易记录与图表；README 已描述免 Docker 启动流程。",
-      "similar_cases": [
-        "tests/data/test_ohlcv_pipeline.py",
-        "tests/dashboard/test_data_access.py"
-      ],
-      "tech_stack": [
-        "Streamlit",
-        "Plotly",
-        "PyArrow"
-      ],
-      "tests": [
-        "tests/dashboard/test_data_access.py"
-      ],
-      "notes": "仪表盘依赖数据仓储更新；若 symbols 同步失败，将影响可视化完整性。"
-    },
-    {
-      "name": "交易与 LLM 历史记录",
-      "locations": [
-        "src/llm_trader/trading/session.py",
-        "src/llm_trader/data/repositories/parquet.py",
-        "src/llm_trader/strategy/logger.py",
-        "src/llm_trader/pipeline/auto.py",
-        "dashboard/data.py",
-        "dashboard/app.py",
-        "src/llm_trader/api/utils.py"
-      ],
-      "current_state": "TradingSession 将订单/成交/权益写入 Parquet，但当订单列表为空时不会生成记录；LLMStrategyLogRepository 将 prompt/response 落到 JSONL，仪表盘的“LLM 策略日志”可显示最近记录。然而缺少统一的交易循环历史表，用于关联模型输入输出与当次交易结果。",
-      "similar_cases": [
         "tests/data/test_trading_repository.py",
-        "tests/api/test_trading.py",
-        "tests/dashboard/test_data_access.py"
+        "tests/reports/test_report_builder.py"
+      ],
+      "notes": "需要重新设计基于 PostgreSQL 的数据模型与存储访问层，替换现有本地文件仓储，并满足决策审计与配置中心一致的数据一致性要求。"
+    },
+    {
+      "name": "API 与仪表盘",
+      "locations": [
+        "src/llm_trader/api",
+        "dashboard",
+        "app.py"
+      ],
+      "current_state": "现有 FastAPI + Streamlit 提供基础数据访问和可视化，但缺少模型网关、审计总账、配置中心等新需求模块，也没有统一的观察与决策链路视图。",
+      "similar_cases": [
+        "tests/api",
+        "tests/dashboard",
+        "docs/dashboard.md"
       ],
       "tech_stack": [
-        "PyArrow Parquet",
-        "JSON Lines",
         "FastAPI",
+        "Uvicorn",
         "Streamlit"
       ],
       "tests": [
         "tests/api/test_trading.py",
-        "tests/dashboard/test_data_access.py",
-        "tests/tasks/test_managed_cycle.py"
+        "tests/dashboard/test_data_access.py"
       ],
-      "notes": "需要在订单缺失时仍保存执行摘要，并通过 API/仪表盘统一暴露模型调用记录、策略输出与交易结果。"
+      "notes": "需重塑 API 分层与仪表盘结构，使其覆盖模型网关、配置中心、审计决策链路，并对接新的 PostgreSQL 数据层。"
+    },
+    {
+      "name": "部署与统一启动",
+      "locations": [
+        "Dockerfile",
+        "docker-compose.prod.yml",
+        "start.sh",
+        "docker/entrypoint.sh"
+      ],
+      "current_state": "已有单容器 Docker 与 start.sh 脚本，依赖文件卷挂载；未集成 PostgreSQL，也未区分多服务组件，统一入口与健康检查逻辑需按新需求 ADM-A/DEP-A 重新设计。",
+      "similar_cases": [
+        "docker-compose.dev.yml",
+        "docs/scheduler.md",
+        "scripts/run_full_pipeline.py"
+      ],
+      "tech_stack": [
+        "Docker Compose",
+        "Poetry",
+        "Bash"
+      ],
+      "tests": [
+        "tests/test_bootstrap.py"
+      ],
+      "notes": "新需求要求 PostgreSQL、模型网关、观测管线、仪表盘等统一容器化部署，并提供统一启动入口与健康探针，需要重新规划 compose 与启动脚本。"
     }
   ],
   "observation_report": {
     "anomalies": [
-      "深交所接口返回 JSON list 时未被解析函数兼容，引发 AttributeError（已在近期修复）。"
+      "现有实现依赖本地 Parquet/DuckDB，与新需求指定的 PostgreSQL 数据库不符。",
+      "Actor/Checker/Risk Gate 等关键角色在当前代码中缺乏清晰的模块化边界。",
+      "部署脚本未包含数据库或多服务组件，无法满足统一启动与健康检查的新要求。"
     ],
     "information_gaps": [
-      "外部依赖 AkShare 等第三方采集方案尚未评估，可作为后续扩展。",
-      "交易历史摘要仍未落盘，需要确定写入位置与数据结构。"
+      "需对《项目需求.md》中的字段级设计逐段提炼，建立与代码实现的一一映射。",
+      "需要明确 PostgreSQL 的目标 schema、索引与迁移策略。",
+      "需要确定统一启动入口需要管理的服务范围（API、调度、数据同步、仪表盘等）。"
     ],
     "suggested_deep_dives": [
-      "梳理 run_full_automation 与 run_managed_trading_cycle 的执行顺序，确定何处记录运行摘要最合适。",
-      "检查 dashboard/data.py 的缓存逻辑，规划如何新增历史接口而不破坏现有分页。"
+      "进一步拆解《项目需求.md》中 Observation、Decision、Decision Ledger 等字段要求，形成数据模型草图。",
+      "评估现有 orchestrator 与任务调度实现，界定可复用的逻辑与需要重写的部分。",
+      "梳理 Docker 与启动脚本，规划引入 PostgreSQL、队列、仪表盘等多容器架构方案。"
     ],
     "tool_notes": {
-      "code_index": "项目未配置 code-index MCP，已改用 shell/rg 检索并将在 operations-log.md 记录。",
-      "sequential_thinking": "任务开始已调用 MCP sequential-thinking 工具记录思路。"
+      "code_index": "仓库未配置 code-index，继续使用 rg 与 shell 探查文件。",
+      "sequential_thinking": "本任务已记录三次 sequential-thinking 思考，用于确认需求与下一步动作。"
     }
   }
 }

@@ -42,3 +42,4 @@ python scripts/run_scheduler.py custom_scheduler.json
 ```
 
 - 代码内也可通过 `start_scheduler_from_dict` 动态构建调度器，与上述 JSON 结构保持一致。
+- 调度任务 `llm_trader.tasks.managed_cycle.run_cycle` 会在每次执行后调用 `record_trading_run_summary` 写入 `trading_runs`，因此即便无真实成交也能在仪表盘“自动交易调用日志”标签快速查看 Prompt/Response 与风控结果。

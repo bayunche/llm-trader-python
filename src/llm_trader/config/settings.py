@@ -181,6 +181,7 @@ class TradingSettings:
     broker_base_url: str = field(default_factory=lambda: _getenv("TRADING_BROKER_BASE_URL", ""))
     broker_api_key: str = field(default_factory=lambda: _getenv("TRADING_BROKER_API_KEY", ""))
     report_output_dir: str = field(default_factory=lambda: _getenv("REPORT_OUTPUT_DIR", "reports"))
+    observation_ttl_ms: int = field(default_factory=lambda: _env_int("TRADING_OBSERVATION_TTL_MS", 3000))
 
 
 @dataclass
@@ -188,6 +189,23 @@ class MonitoringSettings:
     """监控与告警配置。"""
 
     channel: str = field(default_factory=lambda: _getenv("MONITORING_ALERT_CHANNEL", "log"))
+
+
+@dataclass
+class DatabaseSettings:
+    """数据库连接配置。"""
+
+    url: str = field(default_factory=lambda: _getenv("DATABASE_URL", "sqlite:///llm_trader.db"))
+    echo: bool = field(default_factory=lambda: _env_bool("DATABASE_ECHO", False))
+
+
+@dataclass
+class RedisSettings:
+    """Redis 缓存配置。"""
+
+    enabled: bool = field(default_factory=lambda: _env_bool("REDIS_ENABLED", False))
+    url: str = field(default_factory=lambda: _getenv("REDIS_URL", "redis://localhost:6379/0"))
+    decode_responses: bool = field(default_factory=lambda: _env_bool("REDIS_DECODE_RESPONSES", False))
 
 
 @dataclass
@@ -202,6 +220,8 @@ class AppSettings:
     risk: RiskSettings = field(default_factory=RiskSettings)
     trading: TradingSettings = field(default_factory=TradingSettings)
     monitoring: MonitoringSettings = field(default_factory=MonitoringSettings)
+    database: DatabaseSettings = field(default_factory=DatabaseSettings)
+    redis: RedisSettings = field(default_factory=RedisSettings)
 
 
 @lru_cache(maxsize=1)
@@ -220,5 +240,7 @@ __all__ = [
     "MonitoringSettings",
     "RiskSettings",
     "TradingSettings",
+    "DatabaseSettings",
+    "RedisSettings",
     "get_settings",
 ]

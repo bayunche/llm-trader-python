@@ -24,6 +24,9 @@ pendulum = "^3.0.0"
 tenacity = "^8.5.0"
 apscheduler = "^3.10.4"
 openai = "^1.45.0"
+alembic = "^1.13.2"
+psycopg[binary] = "^3.2.1"
+redis = "^5.0.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4"
