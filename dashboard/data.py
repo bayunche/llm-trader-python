@@ -332,6 +332,31 @@ def get_recent_orders(limit: int = 20) -> List[Dict[str, object]]:
     return records[:limit]
 
 
+def get_recent_llm_logs(limit: int = 20) -> List[Dict[str, object]]:
+    """获取最新的大模型调用记录。"""
+
+    rows: List[Dict[str, object]] = []
+    for pair in list_strategy_sessions():
+        strategy_id = pair["strategy_id"]
+        session_id = pair["session_id"]
+        logs = _cached_llm_logs(strategy_id, session_id)
+        if not logs:
+            continue
+        for entry in logs[-limit:]:
+            rows.append(
+                {
+                    "strategy_id": strategy_id,
+                    "session_id": session_id,
+                    "timestamp": entry.get("timestamp"),
+                    "suggestion_description": entry.get("suggestion_description"),
+                    "prompt": entry.get("prompt"),
+                    "response": entry.get("response"),
+                }
+            )
+    rows.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+    return rows[:limit]
+
+
 def aggregate_trades_by_symbol(limit: Optional[int] = None) -> pd.DataFrame:
     """按标的聚合成交金额与笔数。"""
 

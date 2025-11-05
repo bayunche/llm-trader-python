@@ -314,7 +314,14 @@ def main() -> None:
     st.title("LLM Trader 交易仪表盘")
 
     _render_pipeline_status()
-    prompt_tab, trading_tab = st.tabs(["提示词管理", "交易数据"])
+    prompt_tab, trading_tab, history_tab = st.tabs(["提示词管理", "实时交易", "自动交易历史"])
+
+    available_pairs = data.list_strategy_sessions()
+    if available_pairs:
+        strategy_ids = sorted({item["strategy_id"] for item in available_pairs})
+        _render_version_panel(strategy_ids)
+    else:
+        st.info("暂无交易数据，请先运行自动交易循环。")
 
     with prompt_tab:
         st.subheader("策略提示词模板")
@@ -371,9 +378,7 @@ def main() -> None:
             st.info("保存后新模板将在下一次交易循环中生效。")
 
     with trading_tab:
-        available_pairs = data.list_strategy_sessions()
         if not available_pairs:
-            st.info("暂无交易数据，请先运行自动交易循环。")
             return
 
         st.markdown("### 实时交易看板")
@@ -389,7 +394,7 @@ def main() -> None:
         recent_trades = data.get_recent_trades(limit=selected_limit)
         recent_orders = data.get_recent_orders(limit=selected_limit)
 
-        trades_tab, orders_tab = st.tabs(["最近成交", "最近订单"])
+        trades_tab, orders_tab, llm_tab = st.tabs(["最近成交", "最近订单", "最近 LLM 日志"])
         with trades_tab:
             if recent_trades:
                 trades_df = pd.DataFrame(recent_trades)
@@ -414,6 +419,23 @@ def main() -> None:
                 )
             else:
                 st.info("暂无订单记录")
+        with llm_tab:
+            recent_llm = data.get_recent_llm_logs(limit=selected_limit)
+            if recent_llm:
+                llm_df = pd.DataFrame(recent_llm)
+                llm_df["timestamp"] = pd.to_datetime(llm_df["timestamp"])
+                if "prompt" in llm_df.columns:
+                    llm_df["prompt_preview"] = llm_df["prompt"].apply(lambda text: (text or "")[:120])
+                if "response" in llm_df.columns:
+                    llm_df["response_preview"] = llm_df["response"].apply(lambda text: (text or "")[:120])
+                st.dataframe(llm_df[["timestamp", "strategy_id", "session_id", "suggestion_description", "prompt_preview", "response_preview"]])
+                st.download_button(
+                    "下载 LLM 日志 CSV",
+                    llm_df.to_csv(index=False).encode("utf-8"),
+                    file_name="recent_llm_logs.csv",
+                )
+            else:
+                st.info("暂无 LLM 调用记录")
 
         st.markdown("---")
 
@@ -432,9 +454,6 @@ def main() -> None:
             return
 
         selected_pairs = [mapping[label] for label in selected_labels]
-        strategy_ids = sorted({strategy for strategy, _ in selected_pairs})
-        _render_version_panel(strategy_ids)
-
         _render_equity_multi(selected_pairs)
 
         st.subheader("成交数据可视化")
@@ -493,13 +512,28 @@ def main() -> None:
         for tab, (strategy, session) in zip(tabs, selected_pairs):
             with tab:
                 st.markdown("### 策略详情")
-                _render_history(strategy, session)
                 logs = _render_llm_logs(strategy, session)
                 _render_llm_assistant(strategy, session, logs)
                 st.markdown("### 订单流水")
                 _render_orders(strategy, session)
                 st.markdown("### 成交流水")
                 _render_trades(strategy, session)
+
+    with history_tab:
+        if not available_pairs:
+            return
+
+        st.markdown("### 自动交易历史")
+        history_options = [f"{item['strategy_id']}/{item['session_id']}" for item in available_pairs]
+        history_mapping = {
+            label: (item["strategy_id"], item["session_id"])
+            for label, item in zip(history_options, available_pairs)
+        }
+        selected_history = st.selectbox("选择策略/会话", history_options, index=0, key="history-select")
+        strategy, session = history_mapping[selected_history]
+        _render_history(strategy, session)
+        st.markdown("### 模型调用日志")
+        _render_llm_logs(strategy, session)
 
 
 if __name__ == "__main__":

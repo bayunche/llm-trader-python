@@ -1,32 +1,32 @@
 # 调度配置说明
 
-> 更新时间：2025-10-30 ｜ 执行者：Codex
+> 更新时间：2025-11-05 ｜ 执行者：Codex
 
-- 使用 `scripts/run_scheduler.py` + JSON 配置即可在 APScheduler 上注册多个任务。
-- 示例配置：
+- 统一入口 `python app.py` 会自动加载 `config/scheduler.prod.json`，默认每 5 分钟运行一次自动交易循环；仍可在其他场景下单独使用 `scripts/run_scheduler.py`。
+- 典型配置示例（与 `config/scheduler.prod.json` 一致）：
 
 ```json
 {
   "timezone": "Asia/Shanghai",
   "jobs": [
     {
-      "id": "realtime",
+      "id": "realtime-quotes",
       "callable_path": "llm_trader.tasks.realtime.fetch_realtime_quotes",
       "trigger": "interval",
       "interval_minutes": 5,
       "kwargs": {"symbols": ["600000.SH", "000001.SZ"]}
     },
     {
-      "id": "managed-cycle",
+      "id": "managed-trading",
       "callable_path": "llm_trader.tasks.managed_cycle.run_cycle",
       "trigger": "interval",
-      "interval_minutes": 60,
+      "interval_minutes": 5,
       "kwargs": {
         "config": {
           "session_id": "session-demo",
           "strategy_id": "strategy-demo",
           "symbols": ["600000.SH"],
-          "objective": "自动测试",
+          "objective": "自动调度",
           "history_start": "2024-01-01T00:00:00"
         }
       }
@@ -35,10 +35,10 @@
 }
 ```
 
-- 初次使用可运行：
+- 如需自定义配置，可设置 `LLM_TRADER_SCHEDULER_CONFIG=/path/to/custom.json` 后运行 `python app.py`；或单独执行：
 
 ```bash
-python scripts/run_scheduler.py scheduler_config.json
+python scripts/run_scheduler.py custom_scheduler.json
 ```
 
-- 在 CI/生产中亦可通过 `start_scheduler_from_dict` 直接在代码中加载。
+- 代码内也可通过 `start_scheduler_from_dict` 动态构建调度器，与上述 JSON 结构保持一致。

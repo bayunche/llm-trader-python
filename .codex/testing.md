@@ -48,3 +48,6 @@
 | 2025-11-04 16:39 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/data/pipelines/symbols.py tests/data/test_symbols_pipeline.py` | ✅ 通过 | 新增降级逻辑与测试语法检查 |
 | 2025-11-04 20:51 | `env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py` | ⚠️ 未执行 | 当前环境缺少 pytest，请先安装依赖后重试 |
 | 2025-11-04 20:52 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/pipeline/auto.py src/llm_trader/api/utils.py src/llm_trader/api/routes/trading.py src/llm_trader/api/schemas.py dashboard/data.py dashboard/app.py` | ✅ 通过 | 新增交易历史与接口改造语法检查 |
+| 2025-11-04 21:05 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/strategy/engine.py tests/strategy/test_strategy_engine.py` | ✅ 通过 | EMA window 参数兼容与单测语法检查 |
+| 2025-11-04 21:11 | `env PYTHONPATH=src python3 -m compileall dashboard/data.py dashboard/app.py` | ✅ 通过 | 仪表盘新增 LLM 日志视图语法检查 |
+| 2025-11-05 09:01 | `env PYTHONPATH=src python3 -m compileall app.py` | ✅ 通过 | 统一入口脚本语法检查 |

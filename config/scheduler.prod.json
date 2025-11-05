@@ -14,7 +14,7 @@
       "id": "managed-trading",
       "callable_path": "llm_trader.tasks.managed_cycle.run_cycle",
       "trigger": "interval",
-      "interval_minutes": 60,
+      "interval_minutes": 5,
       "kwargs": {
         "config": {
           "session_id": "session-demo",

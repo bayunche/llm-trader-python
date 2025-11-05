@@ -29,7 +29,10 @@ class StrategyEngine:
         signals = pd.Series(True, index=working.index)
         for idx, rule in enumerate(self.rules):
             indicator_fn = get_indicator(rule.indicator)
-            series = indicator_fn(working[rule.column], **rule.params)
+            params = dict(rule.params or {})
+            if rule.indicator == "ema" and "span" not in params and "window" in params:
+                params["span"] = params.pop("window")
+            series = indicator_fn(working[rule.column], **params)
             op = rule.operator
             if op == ">":
                 mask = series > rule.threshold

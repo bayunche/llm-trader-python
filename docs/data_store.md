@@ -13,7 +13,12 @@ data_store/
 ├── fundamentals/            # 基础指标与财务摘要
 ├── strategies/
 │   └── signals/             # 策略信号（策略ID + 版本分区）
-└── backtests/               # 回测结果（策略ID + 运行日期）
+├── backtests/               # 回测结果（策略ID + 运行日期）
+└── trading/
+    ├── orders/              # 订单流水（按 session + strategy + date 分区）
+    ├── trades/              # 成交流水（按 session + strategy + date 分区）
+    ├── equity/              # 资金曲线（按 session + strategy 分区）
+    └── runs/                # 自动交易历史摘要（按 strategy + session 分区）
 ```
 
 - 所有目录均在运行时自动创建，避免手工初始化。
@@ -30,6 +35,11 @@ data_store/
 | Fundamentals | `fundamentals/` | `symbol={symbol}/year={year}` | `{symbol}_{year}.parquet` | 基础指标 |
 | StrategySignals | `strategies/signals/` | `strategy={symbol}/version={freq}` | `signals.parquet` | 策略信号输出 |
 | BacktestResults | `backtests/` | `strategy={symbol}/run_date={date}` | `result.parquet` | 回测结果 |
+| TradingOrders | `trading/orders/` | `session={symbol}/strategy={freq}/date={date}` | `orders.parquet` | 订单流水（created_at 去重） |
+| TradingTrades | `trading/trades/` | `session={symbol}/strategy={freq}/date={date}` | `trades.parquet` | 成交流水（timestamp 去重） |
+| TradingEquity | `trading/equity/` | `session={symbol}/strategy={freq}` | `equity.parquet` | 资金曲线与仓位快照 |
+| TradingRuns | `trading/runs/` | `strategy={symbol}/session={freq}` | `runs.parquet` | 自动交易历史摘要（含 prompt/response） |
+| StrategyLLMLogs | `strategies/llm_logs/` | `strategy={symbol}/session={freq}/date={date}` | `logs.jsonl` | LLM Prompt/Response 日志 |
 
 > 说明：StrategySignals/BacktestResults 中的 `symbol` 字段复用为策略ID，`freq` 字段用于表示策略版本或频率。
 
@@ -73,3 +83,4 @@ print(path)
 - `tests/data/regression` 将存放数据质量回归样本，通过 pytest 校验字段、一致性与分区结构。
 - `scripts/healthcheck.py` 会检测状态文件与提示词模板；后续可扩展为读取回归数据并执行质量校验。
 - 场景化提示词模板存储在 `prompts/templates/<scenario>/<name>/`，当前版本会在 `current.txt` 写入最新内容，并在 `versions/` 目录保留历史记录，便于仪表盘回滚。
+- 自动交易历史摘要会写入 `trading/runs/strategy=<id>/session=<id>/runs.parquet`，可通过 API `/api/trading/history` 或仪表盘“自动交易历史”查看。*** End Patch

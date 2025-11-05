@@ -100,10 +100,22 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
 
 ### 2. 全流程自动化（本地运行）
 
-1. 确认 `.env` 中已配置以下核心项（可参考 `.env.example`）：  
+1. 推荐方式：使用统一入口一次启动全流程、调度器与仪表盘（默认每 5 分钟自动调度）：  
+
+   ```bash
+   env PYTHONPATH=src python app.py
+   ```
+
+   - 首次启动会立即执行一次自动交易循环；
+   - 后续由 APScheduler 根据 `config/scheduler.prod.json` 的设置每 5 分钟触发一次 `managed-trading` 任务；
+   - Streamlit 仪表盘会自动在 `DASHBOARD_PORT`（默认 8501）监听，可通过 `LLM_TRADER_SCHEDULER_CONFIG` 指定其他调度配置，或设置 `LLM_TRADER_SKIP_INITIAL_PIPELINE=1` 跳过首次全量执行。
+
+2. （可选）如仅需执行一次而不启动调度器，可继续使用原脚本：  
+
+   - 确认 `.env` 中已配置以下核心项（可参考 `.env.example`）：  
    `TRADING_SESSION`, `TRADING_STRATEGY`, `TRADING_SYMBOLS`, `TRADING_OBJECTIVE`, `TRADING_FREQ`, `TRADING_LOOKBACK_DAYS`、`OPENAI_API_KEY` 等。  
    默认报表目录由 `TRADING_REPORT_OUTPUT_DIR` 控制（缺省为 `reports/`）。
-2. 运行自动化脚本：
+   - 运行自动化脚本：
 
    ```bash
    env PYTHONPATH=src python scripts/run_full_pipeline.py
@@ -111,8 +123,9 @@ python scripts/run_realtime_scheduler.py --symbols 600000.SH 000001.SZ
 
    该脚本会依次执行 **证券主表 & 实时/历史行情同步 → LLM 策略生成 → 回测验收 → 风控执行 → 报表写入**，并将阶段结果写入 `${REPORT_OUTPUT_DIR}/status.json`。证券主表步骤会先尝试东方财富多域名接口，若均失败则自动切换至上交所/深交所公开数据；如交易所接口仍不可用则会回退到本地缓存的 `symbols.parquet`。实时行情同步后会自动按 `TRADING_SELECTION_METRIC`（默认 `amount`）排序选出前 `TRADING_SYMBOL_UNIVERSE_LIMIT` 个标的传递给大模型。
    首次运行若网络受限仍建议预先拉取关键标的，脚本会在缺失时自动补齐指定窗口。
+
 3. 产出的报表与 LLM 日志位于 `${REPORT_OUTPUT_DIR}/<strategy>/<session>/<timestamp>/`，可在仪表盘实时看板与图表模块中查看。
-4. 若需定时轮询，可使用调度器：
+4. 若需自定义调度，可直接调用调度器脚本：
 
    ```bash
    env PYTHONPATH=src python scripts/run_scheduler.py config/scheduler.prod.json
@@ -182,6 +195,7 @@ docker compose -f docker-compose.prod.yml up --build
 ```
 
 容器内入口脚本会执行完整流水线并启动 Dashboard。阶段状态持续写入 `${REPORT_OUTPUT_DIR}/status.json`。
+同时，容器会调用 `python app.py`，先执行一次自动交易循环，再根据 `config/scheduler.prod.json` 自动每 5 分钟运行一次 `managed-trading` 任务；无需额外手动启动调度器。若需仅构建镜像，可执行 `docker compose build`。
 
 ---
 

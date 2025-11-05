@@ -27,6 +27,28 @@ def test_strategy_engine_generates_signals() -> None:
     assert result["signal"].iloc[-1] in {0, 1, -1}
 
 
+def test_strategy_engine_supports_ema_window_alias() -> None:
+    data = pd.DataFrame(
+        {
+            "close": [10, 10.2, 10.4, 10.6, 10.8, 11.0],
+        },
+        index=pd.date_range("2024-07-01", periods=6, freq="D"),
+    )
+    rules = [
+        RuleConfig(
+            indicator="ema",
+            column="close",
+            params={"window": 3},
+            operator=">",
+            threshold=9.5,
+        )
+    ]
+    engine = StrategyEngine(rules)
+    result = engine.evaluate(data)
+    assert "rule_0" in result.columns
+    assert result["rule_0"].iloc[-1] is True
+
+
 def test_generate_orders_from_signals() -> None:
     index = pd.date_range("2024-07-01", periods=3, freq="D")
     df = pd.DataFrame({"signal": [0, 1, -1], "open": [10, 10.5, 10.8]}, index=index)

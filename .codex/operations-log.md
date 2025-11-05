@@ -795,3 +795,19 @@
 2025-11-04T20:51:24+08:00 | apply_patch | verification.md | 成功：更新验证记录
 2025-11-04T20:52:00+08:00 | shell | env PYTHONPATH=src python3 -m compileall src/llm_trader/pipeline/auto.py src/llm_trader/api/utils.py src/llm_trader/api/routes/trading.py src/llm_trader/api/schemas.py dashboard/data.py dashboard/app.py | 成功：语法检查通过
 2025-11-04T20:52:06+08:00 | apply_patch | .codex/testing.md | 成功：登记 compileall 结果
+2025-11-04T21:05:00+08:00 | shell | sed -n '1,120p' src/llm_trader/strategy/library/indicators.py | 成功：确认 EMA 参数定义
+2025-11-04T21:05:05+08:00 | apply_patch | src/llm_trader/strategy/engine.py | 成功：为 EMA 支持 window 别名
+2025-11-04T21:05:10+08:00 | apply_patch | tests/strategy/test_strategy_engine.py | 成功：新增 EMA window 测试
+2025-11-04T21:10:20+08:00 | apply_patch | dashboard/data.py | 成功：新增 get_recent_llm_logs 聚合
+2025-11-04T21:10:25+08:00 | apply_patch | dashboard/app.py | 成功：实时看板增加 LLM 日志标签
+2025-11-04T21:10:30+08:00 | apply_patch | tests/dashboard/test_data_access.py | 成功：测试覆盖最近 LLM 日志
+2025-11-04T21:10:40+08:00 | shell | env PYTHONPATH=src python3 -m compileall dashboard/data.py dashboard/app.py | 成功：仪表盘语法检查
+2025-11-04T21:11:10+08:00 | apply_patch | dashboard/app.py | 成功：修正 LLM 日志标签缩进
+2025-11-05T08:57:40+08:00 | apply_patch | config/scheduler.prod.json | 成功：将 managed-trading 调度频率改为 5 分钟
+2025-11-05T09:00:40+08:00 | shell | git status -sb | 成功：确认 app.py 变更状态
+2025-11-05T09:01:05+08:00 | apply_patch | docker/entrypoint.sh | 成功：统一转向 python app.py 入口
+2025-11-05T09:01:30+08:00 | apply_patch | README.md | 成功：补充 app.py 统一入口与调度说明
+2025-11-05T09:01:40+08:00 | shell | env PYTHONPATH=src python3 -m compileall app.py | 成功：app.py 语法检查
+2025-11-05T09:01:50+08:00 | apply_patch | docs/scheduler.md | 成功：更新统一入口与5分钟调度说明
+2025-11-05T09:01:55+08:00 | apply_patch | docs/data_store.md | 成功：补充 trading/runs 数据集文档
+2025-11-05T09:02:00+08:00 | apply_patch | .env.example | 成功：新增 LLM_TRADER_SCHEDULER_CONFIG 并调整默认间隔
