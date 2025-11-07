@@ -251,6 +251,38 @@ docker compose -f docker-compose.prod.yml up --build
   - 当前缺少 `httpx==0.27.2` 的离线包，需提前下载或调整 requirements；否则请在具备外网的环境完成一次 `pip download` 并缓存。
   - 长耗时 pytest 可按模块分批执行，并为全量回归设置 `PYTEST_ADDOPTS="--maxfail=1 --timeout=600 --durations=10"` 观察慢用例，必要时在 `tests/data` 引入固定数据以避免外部请求。
 
+### Docker 测试流程
+
+> 适用于需要完整 PostgreSQL / Redis / Worker 的端到端验证场景。
+
+1. **准备环境**
+   - 安装 Docker 24+ 与 Compose 插件。
+   - 将 `.env` 与 `config/` 下的必要配置复制到当前目录。
+2. **构建镜像**
+   ```bash
+   docker compose -f docker-compose.prod.yml build
+   ```
+   或仅构建特定服务：
+   ```bash
+   docker compose -f docker-compose.prod.yml build api worker dashboard
+   ```
+3. **执行集成测试**
+   ```bash
+   docker compose -f docker-compose.prod.yml up --build --abort-on-container-exit
+   ```
+   - `api` 服务在启动脚本中会自动运行 `python -m pytest`，日志输出可在 `api` 容器终端查看。
+   - `worker` / `dashboard` 会在 `postgres`、`redis` 就绪后拉起，便于观察实时数据。
+4. **收集结果**
+   - 测试日志：`docker compose logs api`.
+   - 若需导出报告，可在 `reports/` 目录挂载宿主机路径。
+5. **清理资源**
+   ```bash
+   docker compose -f docker-compose.prod.yml down -v
+   ```
+   释放容器与挂载卷。若测试失败，请在 `verification.md` 记录命令、日志摘要与失败原因。
+
+> 注意：当前环境（LLM Trader 开发沙箱）禁用 Docker 命令，如需实际运行，请在拥有 Docker 权限的机器上执行并将日志粘贴回仓库。
+
 ---
 
 ## 🗺 路线图
