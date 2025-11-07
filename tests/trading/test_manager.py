@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from types import SimpleNamespace
 
+from llm_trader.decision import ActorDecisionPayload
 from llm_trader.trading import TradingSessionConfig
 from llm_trader.trading.manager import run_managed_trading_cycle
 from llm_trader.trading.policy import RiskDecision, RiskPolicy, RiskThresholds
@@ -99,6 +101,71 @@ def test_run_managed_trading_cycle_triggers_policy(monkeypatch) -> None:
     )
     assert not outcome.decision.proceed
     assert outcome.decision.alerts
+
+
+def test_run_managed_trading_cycle_records_risk(monkeypatch) -> None:
+    actor_payload = ActorDecisionPayload.model_validate(
+        {
+            "decision_id": "dec-test",
+            "timestamp": "2025-01-01T09:30:00Z",
+            "observations_ref": "obs-1",
+            "account_view": {"nav": 1000000, "cash": 500000},
+            "actions": [
+                {
+                    "type": "place_order",
+                    "symbol": "600000.SH",
+                    "side": "buy",
+                    "order_type": "limit",
+                    "price": 10.5,
+                    "qty": 100,
+                    "tif": "day",
+                }
+            ],
+        }
+    )
+
+    session = TradingSession(TradingSessionConfig(session_id="session", strategy_id="strategy"))
+
+    def fake_run_ai(config, **kwargs):
+        return {
+            "session": session,
+            "decision": actor_payload,
+            "decision_record": SimpleNamespace(decision=SimpleNamespace(decision_id="dec-test"), checker_result=None),
+            "checker_result": None,
+        }
+
+    class StubDecisionService:
+        def __init__(self) -> None:
+            self.risk_args = None
+            self.ledger_args = None
+
+        def record_risk_result(self, **kwargs):
+            self.risk_args = kwargs
+            return SimpleNamespace(**kwargs)
+
+        def record_ledger(self, **kwargs):
+            self.ledger_args = kwargs
+            return SimpleNamespace(**kwargs)
+
+    monkeypatch.setattr("llm_trader.trading.manager.run_ai_trading_cycle", fake_run_ai)
+    decision_service = StubDecisionService()
+
+    outcome = run_managed_trading_cycle(
+        TradingCycleConfig(
+            session_id="session",
+            strategy_id="strategy",
+            symbols=["600000.SH"],
+            objective="测试",
+            history_start=datetime(2024, 1, 1),
+        ),
+        decision_service=decision_service,
+    )
+
+    assert outcome.decision.proceed
+    assert decision_service.risk_args is not None
+    assert decision_service.risk_args["decision_id"] == "dec-test"
+    assert decision_service.ledger_args is not None
+    assert decision_service.ledger_args["decision_id"] == "dec-test"
 
 
 def test_run_managed_trading_cycle_emits_alert(monkeypatch) -> None:

@@ -9,6 +9,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from sys import version_info
 from typing import Any, Callable, ContextManager, Dict, List, Optional, Sequence
 
 import pendulum
@@ -25,7 +26,10 @@ _LOGGER = get_logger("observation.builder")
 SessionFactory = Callable[[], ContextManager[Session]]
 
 
-@dataclass(slots=True)
+_DATACLASS_ARGS = {"slots": True} if version_info >= (3, 10) else {}
+
+
+@dataclass(**_DATACLASS_ARGS)
 class ObservationPayload:
     """观测输出结构。"""
 

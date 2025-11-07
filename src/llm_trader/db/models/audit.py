@@ -5,11 +5,14 @@ from __future__ import annotations
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from .core import Decision
 
 from .enums import DecisionStatus, ModelRole
 
@@ -21,7 +24,7 @@ class DecisionLedger(SQLModel, table=True):
 
     id: Optional[int] = Field(
         default=None,
-        sa_column=Column("id", type_=int, primary_key=True, autoincrement=True),
+        sa_column=Column("id", Integer, primary_key=True, autoincrement=True),
         description="自增主键",
     )
     decision_id: str = Field(
@@ -74,7 +77,7 @@ class DecisionLedger(SQLModel, table=True):
         description="首次执行时间",
     )
 
-    decision = Relationship(back_populates="ledger")
+    decision: "Decision" = Relationship(back_populates="ledger")
 
 
 class LLMCallAudit(SQLModel, table=True):
@@ -113,19 +116,19 @@ class LLMCallAudit(SQLModel, table=True):
         description="提示词哈希",
     )
     tokens_prompt: int = Field(
-        sa_column=Column("tokens_prompt", type_=int, nullable=False),
+        sa_column=Column("tokens_prompt", Integer, nullable=False),
         description="提示 token 数",
     )
     tokens_completion: int = Field(
-        sa_column=Column("tokens_completion", type_=int, nullable=False),
+        sa_column=Column("tokens_completion", Integer, nullable=False),
         description="输出 token 数",
     )
     latency_ms: int = Field(
-        sa_column=Column("latency_ms", type_=int, nullable=False),
+        sa_column=Column("latency_ms", Integer, nullable=False),
         description="延迟（毫秒）",
     )
     cost: float = Field(
-        sa_column=Column("cost", type_=float, nullable=False, default=0.0),
+        sa_column=Column("cost", Float, nullable=False, default=0.0),
         description="成本估计",
     )
     created_at: datetime = Field(

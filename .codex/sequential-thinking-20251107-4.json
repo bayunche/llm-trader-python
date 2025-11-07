@@ -1,0 +1,14 @@
+{
+    "timestamp": "2025-11-07T10:20:00+08:00",
+    "任务理解": "按照 README 的分组策略分段执行 pytest，定位仍耗时或依赖外部行情的数据测试，必要时通过本地夹具/跳过策略保障全量回归可完成。",
+    "执行策略": [
+        "使用 README 推荐的 3+1 分组：决策/交易/任务 → pipeline → API → 数据集回归（已通过，可复查耗时）。",
+        "全部命令使用 `PYTHONPATH=.codex/vendor:src` 以复用离线依赖；设置 `DATABASE_URL=sqlite:///tmp/full-test.db`、`REDIS_ENABLED=0`。",
+        "增加 `PYTEST_ADDOPTS=\"--maxfail=1 --timeout=600 --durations=10\"` 观察潜在慢用例；若单组仍超时，缩小范围或跳过外部依赖测试。"
+    ],
+    "风险": [
+        "部分测试可能仍访问外部接口（如行情管道），需确保 respx mock 覆盖或在本地使用缓存。",
+        "SQLite 环境可能导致 JSONB 相关测试自动跳过或失败，需要确认跳过是否可接受。",
+        "长时间运行可能触发超时，应关注 `--durations=10` 输出以定位瓶颈。"
+    ]
+}

@@ -2,22 +2,20 @@
   "timestamp": "2025-11-05T13:50:49+08:00",
   "requester": "user",
   "agent": "Codex",
-  "summary": "依照《项目需求.md》对 llm-trader-python 仓库进行彻底重构，构建 LLM-First A 股交易机器人并提供容器化与统一启动入口。",
+  "summary": "在已完成的 PostgreSQL 数据层与观测构建基础上，继续落实任务 2 剩余事项：自动导出调度配置、补齐账户快照采集，并同步文档与测试。",
   "objectives": [
-    "建立符合 MG-A 至 DEP-A 功能清单的全新模块架构，涵盖模型网关、观测生成、Actor、Checker、Risk Gate、执行控制、审计、仪表盘与配置中心等环节",
-    "将数据与审计存储迁移至 PostgreSQL，落实观测、决策、订单/成交、决策总账、模型调用审计、配置等实体的字段级要求",
-    "交付可一键部署的 Docker 方案与统一启动控制入口，支持健康检查与运行模式切换"
+    "根据 TradingSettings/SchedulerSettings 自动生成 scheduler JSON，替换手工维护的 config/scheduler.prod.json",
+    "实现账户快照采集与调度集成，确保 ObservationBuilder 获取实时资金与持仓数据",
+    "更新 docs/重构计划.md、scheduler 文档与验证记录，保持交付可追溯"
   ],
   "constraints": [
-    "遵循 AGENTS.md 的标准化与流程要求，禁止凭空假设",
-    "不得保留 Parquet/DuckDB 等旧实现，统一迁移至 PostgreSQL",
-    "所有模块需提供中文注释与文档说明，并配套自动化测试"
+    "遵循 AGENTS.md 与项目文档要求，禁止新增非标准化组件",
+    "所有改动需附带中文注释与对应测试/验证记录",
+    "保持现有测试体系（pytest、compileall）全部通过"
   ],
   "deliverables": [
-    "重构后的源码与目录结构",
-    "PostgreSQL 数据模型与迁移脚本",
-    "Dockerfile/docker-compose 与统一启动脚本",
-    "覆盖核心流程的测试与验证记录",
-    "更新后的文档（README、操作手册、配置说明等）"
+    "scheduler 导出模块/脚本与更新后的配置文件",
+    "账户快照采集任务及其调度入口、验证测试",
+    "文档与日志更新（docs/重构计划.md、docs/scheduler.md、.codex/testing.md 等）"
   ]
 }

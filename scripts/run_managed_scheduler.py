@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from llm_trader.config import get_settings
 from llm_trader.trading import RiskPolicy, RiskThresholds
 from llm_trader.trading.orchestrator import TradingCycleConfig
 from llm_trader.tasks.managed_cycle import start_managed_scheduler
+from llm_trader.scheduler import export_scheduler_config
 
 
 def _parse_args() -> argparse.Namespace:
@@ -30,6 +32,11 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="交易执行模式（默认读取 TRADING_EXECUTION_MODE）",
     )
+    parser.add_argument(
+        "--export-config",
+        metavar="PATH",
+        help="仅导出 scheduler 配置到指定文件然后退出",
+    )
     return parser.parse_args()
 
 
@@ -37,6 +44,12 @@ def main() -> None:
     args = _parse_args()
     settings = get_settings().trading
     risk_settings = get_settings().risk
+
+    if args.export_config:
+        target = Path(args.export_config)
+        export_scheduler_config(target)
+        print(f"Scheduler config exported to {target}")  # noqa: T201
+        return
 
     session_ids = args.session or [settings.session_id]
     strategy_ids = args.strategy or [settings.strategy_id]

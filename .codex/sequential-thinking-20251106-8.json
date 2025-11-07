@@ -1,0 +1,22 @@
+{
+    "timestamp": "2025-11-06T14:13:59+08:00",
+    "任务理解": "下一步聚焦重构计划剩余项：1) Risk Gate + Decision Ledger 已完成，继续落地执行层与审计仪表盘输出；2) 补齐配置中心灰度与权限说明；3) 制定全量 pytest 可复现流程（依赖启动/脚本/时间配置）。",
+    "待办拆解": [
+        "回顾重构计划表格后续任务（Risk Gate 深化、决策总账报表、配置中心、测试体系），确定优先级。",
+        "设计 Risk Gate 规则配置文件与运行时接口，确保 manager/managed_cycle 执行时可按策略/账户读取阈值。",
+        "扩展 Decision Ledger 输出，支持仪表盘读取：定义 API 或数据管道，更新 docs/monitoring.md。",
+        "配置中心：补充提示词模板/风控参数接口及权限说明，文档与测试同步。",
+        "pytest 流程：整理依赖启动脚本（docker compose）、环境变量、分段执行命令，记录在 README/verification.md。"
+    ],
+    "风险": [
+        "决策总账写入频繁，需考虑幂等与冲突；仪表盘读取需要转换格式。",
+        "配置中心操作可能引入权限与灰度逻辑，需确保文档说明、测试覆盖。",
+        "全量 pytest 依赖外部服务（Postgres/Redis），需提供可复制的启动流程。"
+    ],
+    "计划": [
+        "先扩展 docs/monitoring.md 与 README，描述 Risk Gate/Decision Ledger 输出与配置中心使用。",
+        "梳理 Risk Gate 配置读写（risk.json）并在代码中加入口；若现有缺失，则规划实现步骤或记录 TODO。",
+        "准备测试执行文档/脚本（如 `scripts/run_tests.sh` 或 Makefile 目标），说明 docker-compose 与超时配置。",
+        "更新 docs/重构计划.md，写明下一阶段工作项。"
+    ]
+}

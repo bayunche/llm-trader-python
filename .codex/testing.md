@@ -66,3 +66,30 @@
 | 2025-11-05 15:06 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/trading/orchestrator.py src/llm_trader/trading/manager.py src/llm_trader/pipeline/auto.py scripts/run_full_pipeline.py tests/trading/test_orchestrator.py` | ✅ 通过 | 更新 AI 循环、受控交易、统一入口及相关测试的语法检查 |
 | 2025-11-05 15:18 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/observation/service.py tests/observation/test_observation_builder.py` | ✅ 通过 | 观测缓存策略与测试更新后的语法检查 |
 | 2025-11-05 15:46 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/observation/service.py scripts/run_full_pipeline.py src/llm_trader/tasks/managed_cycle.py` | ✅ 通过 | 缓存策略完善后重新检查核心模块 |
+| 2025-11-06 00:09 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/model_gateway src/llm_trader/config` | ✅ 通过 | 模型网关与配置模块新增后语法检查 |
+| 2025-11-06 00:10 | `env PYTHONPATH=src python3 -m pytest tests/model_gateway/test_service.py` | ⚠️ 未完成 | 受限于既有 SQLModel 定义使用 `type_=int` 导致 SQLAlchemy 断言失败，待修复数据库模型后重跑 |
+| 2025-11-06 08:59 | `env PYTHONPATH=src python3 -m pytest tests/model_gateway/test_service.py` | ✅ 通过 | 使用 stub session/audit 后验证模型网关调用与回退逻辑 |
+| 2025-11-05 23:22 | `env PYTHONPATH=src python3 -m pytest` | ⚠️ 未完成 | 本地环境缺少 SQLModel/ReportWriter 等依赖，测试收集阶段失败，需在完整依赖环境重跑 |
+| 2025-11-06 09:43 | `env PYTHONPATH=src python3 -m pytest` | ⚠️ 未完成 | Python3.8 环境不支持 `dataclass(slots=True)`，需调整采集/观测数据类 |
+| 2025-11-06 09:45 | `env PYTHONPATH=src python3 -m pytest` | ⚠️ 未完成 | pipeline 模块依赖 `ReportWriter` 未提供实现，需补充后再跑全量测试 |
+| 2025-11-06 09:46 | `env PYTHONPATH=src python3 -m pytest tests/model_gateway/test_service.py` | ✅ 通过 | 再次验证模型网关服务逻辑，确保熔断统计未回归 |
+| 2025-11-06 09:48 | `env PYTHONPATH=src python3 -m pytest tests/decision/test_actor_service.py` | ✅ 通过 | Actor/Checker 服务序列化修复后单测通过 |
+| 2025-11-06 09:55 | `env PYTHONPATH=src python3 -m pytest tests/api/test_config_models.py` | ✅ 通过 | 模型配置 API 列表/更新/指标接口单测通过 |
+| 2025-11-06 13:26 | `env PYTHONPATH=src python3 -m pytest tests/pipeline/test_auto.py -q` | ✅ 通过 | 自动交易全流程单测验证 ReportWriter 集成 |
+| 2025-11-06 13:30 | `env PYTHONPATH=src python3 -m pytest` | ⚠️ 未完成 | 全量 pytest 超过 120s 超时，需后续在资源充足环境重跑 |
+| 2025-11-06 13:33 | `env PYTHONPATH=src python3 -m compileall src/llm_trader/reports` | ✅ 通过 | 报表构建与写入模块语法检查 |
+| 2025-11-06 13:46 | `env PYTHONPATH=src python3 -m pytest tests/decision/test_decision_service.py -q` | ⚠️ 跳过 | SQLite 不支持 JSONB，测试被跳过 |
+| 2025-11-06 13:47 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_orchestrator.py -q` | ✅ 通过 | Orchestrator 引入 Actor/Checker 后回归 |
+| 2025-11-06 13:48 | `env PYTHONPATH=src python3 -m pytest tests/trading/test_manager.py -q` | ✅ 通过 | Managed Trading Manager 回归 |
+| 2025-11-06 13:55 | `env PYTHONPATH=src python3 -m pytest tests/tasks/test_managed_cycle.py -q` | ✅ 通过 | 调度任务在注入 Actor/Checker 后回归 |
+| 2025-11-06 14:05 | `env PYTHONPATH=src python3 -m pytest tests/pipeline/test_auto.py -q` | ✅ 通过 | Pipeline 全链路在记录决策后保持成功 |
+| 2025-11-07 09:41 | `env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py` | ✅ 通过 | ParquetRepository 写入去重逻辑验证 |
+| 2025-11-07 09:41 | `env PYTHONPATH=src python3 -m pytest tests/data/regression/test_data_quality.py` | ✅ 通过 | 数据质量回归验证日线写入封装 |
+| 2025-11-07 09:51 | `env PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest` | ⚠️ 超时 | 600s 内未完成，疑似仍有外部依赖或长耗时用例 |
+| 2025-11-07 10:00 | `env PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest` | ⚠️ 超时 | 增加至 1200s 仍未结束，全量 pytest 堵塞 |
+| 2025-11-07 10:11 | `env PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest tests/data/test_symbols_pipeline.py -vv` | ✅ 通过 | 修复交易所降级逻辑后验证主表管道回退策略 |
+| 2025-11-07 10:20 | `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 PYTEST_ADDOPTS="--maxfail=1 --durations=10" python3 -m pytest tests/decision tests/trading tests/tasks -q` | ✅ 通过 | 分组执行决策/交易/任务测试，P95<0.2s，JSONB 用例在 SQLite 上跳过 |
+| 2025-11-07 10:21 | `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 PYTEST_ADDOPTS="--maxfail=1 --durations=10" python3 -m pytest tests/pipeline/test_auto.py -q` | ✅ 通过 | 自动化管线分组测试完成 |
+| 2025-11-07 10:22 | `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 PYTEST_ADDOPTS="--maxfail=1 --durations=10" python3 -m pytest tests/api/test_config_models.py -q` | ⚠️ 超时 | 600s 内未完成，卡在 test_list_and_upsert_model_endpoint |
+| 2025-11-07 10:33 | `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest tests/api/test_config_models.py -vv` | ⚠️ 超时 | 再次 600s 卡住，确认阻塞于 config_models API 测试 |
+| 2025-11-07 10:43 | `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest tests/api/test_config_models.py::test_metrics_endpoint -vv` | ⚠️ 超时 | 单独 metrics 用例仍未返回，需进一步定位依赖或改用本地桩 |

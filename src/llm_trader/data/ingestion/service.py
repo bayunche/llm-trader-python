@@ -7,11 +7,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, ContextManager, Iterable, List, Optional, Sequence, Dict
+from sys import version_info
+from typing import Callable, ContextManager, Dict, Iterable, List, Optional, Sequence
 
 from sqlmodel import Session
 
 from llm_trader.common import get_logger
+from llm_trader.data.pipelines.accounts import AccountSnapshotPipeline
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
 from llm_trader.data.pipelines.symbols import SymbolsPipeline
 from llm_trader.data.repositories.postgres import PostgresDataRepository
@@ -22,8 +24,10 @@ _LOGGER = get_logger("data.ingestion.service")
 
 SessionFactory = Callable[[], ContextManager[Session]]
 
+_DATACLASS_ARGS = {"slots": True} if version_info >= (3, 10) else {}
 
-@dataclass(slots=True)
+
+@dataclass(**_DATACLASS_ARGS)
 class AccountPositionPayload:
     """账户持仓采集结构。"""
 
@@ -33,7 +37,7 @@ class AccountPositionPayload:
     market_value: Optional[float] = None
 
 
-@dataclass(slots=True)
+@dataclass(**_DATACLASS_ARGS)
 class AccountSnapshotPayload:
     """账户资金采集结构。"""
 
@@ -54,11 +58,13 @@ class DataIngestionService:
         *,
         symbols_pipeline: Optional[SymbolsPipeline] = None,
         quotes_pipeline: Optional[RealtimeQuotesPipeline] = None,
+        account_pipeline: Optional[AccountSnapshotPipeline] = None,
         symbol_universe_limit: int = 200,
     ) -> None:
         self._session_factory = session_factory
         self._symbols_pipeline = symbols_pipeline or SymbolsPipeline()
         self._quotes_pipeline = quotes_pipeline or RealtimeQuotesPipeline()
+        self._account_pipeline = account_pipeline or AccountSnapshotPipeline()
         self._symbol_universe_limit = symbol_universe_limit
 
     @contextmanager
@@ -145,3 +151,45 @@ class DataIngestionService:
             "账户快照已写入 PostgreSQL",
             extra={"captured_at": payload.captured_at.isoformat(), "positions": len(payload.positions)},
         )
+
+    def sync_account_snapshot(self) -> Optional[AccountSnapshotPayload]:
+        """通过账户管道采集并持久化账户资金与持仓信息。"""
+
+        if self._account_pipeline is None:
+            return None
+        snapshot = self._account_pipeline.fetch()
+        if not snapshot:
+            _LOGGER.warning("账户管道未返回数据，跳过写入")
+            return None
+        posture_raw = snapshot.get("posture", RiskPosture.NORMAL)
+        posture = posture_raw if isinstance(posture_raw, RiskPosture) else RiskPosture(str(posture_raw))
+        positions_payload = []
+        for item in snapshot.get("positions", []):
+            positions_payload.append(
+                AccountPositionPayload(
+                    symbol=str(item.get("symbol")),
+                    qty=float(item.get("qty", 0.0)),
+                    avg_price=item.get("avg_price"),
+                    market_value=item.get("market_value"),
+                )
+            )
+        captured_raw = snapshot.get("captured_at")
+        if isinstance(captured_raw, str):
+            try:
+                captured_at = datetime.fromisoformat(captured_raw)
+            except ValueError:  # pragma: no cover - 不合法字符串回退
+                captured_at = datetime.utcnow()
+        elif isinstance(captured_raw, datetime):
+            captured_at = captured_raw
+        else:
+            captured_at = datetime.utcnow()
+        payload = AccountSnapshotPayload(
+            captured_at=captured_at,
+            nav=float(snapshot.get("nav", 0.0)),
+            cash=float(snapshot.get("cash", 0.0)),
+            available=float(snapshot.get("available", 0.0)),
+            posture=posture,
+            positions=positions_payload,
+        )
+        self.store_account_snapshot(payload)
+        return payload

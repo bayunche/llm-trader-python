@@ -1,0 +1,34 @@
+{
+    "question": "调度配置需要如何从 TradingSettings 与 RiskSettings 自动导出？",
+    "priority": "high",
+    "reason_to_investigate": "docs/重构计划.md 将“导出调度配置”列为任务 2 剩余事项，若不了解目标结构与字段映射，无法实现自动生成 scheduler 配置文件。",
+    "findings": [
+        {
+            "file": "docs/重构计划.md",
+            "lines": "14-32",
+            "summary": "任务 2 的备注明确指出“待导出调度配置”，说明需要由代码生成 config/scheduler.prod.json，而非手工维护。"
+        },
+        {
+            "file": "docs/scheduler.md",
+            "lines": "1-60",
+            "summary": "文档示例展示了 scheduler JSON 结构：timezone + jobs 数组，jobs 包含 id、callable_path、trigger、interval_minutes 和 kwargs，kwargs 中传递了 managed_cycle 配置。"
+        },
+        {
+            "file": "scripts/run_managed_scheduler.py",
+            "lines": "20-130",
+            "summary": "脚本根据 TradingSettings/RiskSettings 构造 TradingCycleConfig 列表并启动调度，展示了 session_id、strategy_id、symbols、objective、lookback、llm_model、execution_mode 等字段的来源，可作为导出 JSON 的映射参考。"
+        },
+        {
+            "file": "src/llm_trader/config/settings.py",
+            "lines": "98-184",
+            "summary": "TradingSettings 定义了 scheduler_interval_minutes、symbol_universe_limit、llm_model、lookback_days 等默认值，RiskSettings 提供 max_equity_drawdown 与 max_position_ratio，可决定 JSON 中的调度间隔与策略参数。"
+        },
+        {
+            "file": "config/scheduler.prod.json",
+            "lines": "1-24",
+            "summary": "当前文件为静态示例，包含 realtime-quotes 与 managed-trading 两个任务；若导出逻辑成立，生成结果需与该格式保持一致，并允许根据环境变量替换 symbols 与间隔。"
+        }
+    ],
+    "conclusion": "自动导出功能需要读取 TradingSettings/RiskSettings，构造与 docs/scheduler.md 示例一致的 JSON：timezone 来自 SchedulerSettings，jobs 至少包含实时行情抓取与 managed_cycle 调用，并将 TradingCycleConfig 关键字段写入 kwargs.config 中。Risk 阈值可能通过附加 kwargs 传递或在 run_cycle 内部查表处理。",
+    "next_steps": "梳理 run_cycle 允许的 kwargs（例如 policy）并决定是否在 JSON 中嵌入风险阈值；设计一个 CLI 或模块函数将当前 settings 导出成 JSON 文件，覆盖 config/scheduler.prod.json；为导出函数添加单元测试，断言与示例结构一致。"
+}

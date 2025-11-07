@@ -1,0 +1,21 @@
+{
+    "timestamp": "2025-11-06T10:10:53+08:00",
+    "任务理解": "实现 ReportWriter 以及相关依赖，使 pipeline 全量 pytest 可运行：补齐 ReportPayload 字段、ReportBuilder 返回结构化结果、ReportWriter 输出文件、更新引用并补充文档/测试记录。",
+    "关键信息": [
+        "pipeine/auto.py 引入 ReportWriter，但 reports 包未提供实现，导致 ImportError。",
+        "ReportBuilder.build 目前仅返回 summary 路径，无法为 Writer 提供足够上下文；ReportPayload 缺少 orders 字段。",
+        "scripts/generate_report.py 也依赖 ReportWriter，需保持一致接口。"
+    ],
+    "风险评估": [
+        "改动 ReportBuilder 返回值需同步 pipeline 和脚本，避免破坏其它调用。",
+        "ReportWriter 需要处理文件复制及目录结构，注意与现有 reports 目录兼容，避免重复命名。",
+        "新增字段/类型后需更新测试，确保 dataclass/JSON dumps 稳定。"
+    ],
+    "执行要点": [
+        "扩展 ReportPayload 引入 orders 字段，调整 builder 和调用方。",
+        "新建 ReportBuildResult 数据类，builder.build 返回 artifacts 映射。",
+        "实现 ReportWriter.write：落地到 report_output_dir/strategy=... 结构，生成 manifest。",
+        "更新 scripts 与 pipeline，补充单测或至少执行 pytest 覆盖 pipeline auto。",
+        "更新 docs/README 述及 ReportWriter 行为，记录测试结果。"
+    ]
+}

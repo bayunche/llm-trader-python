@@ -1,0 +1,34 @@
+{
+    "question": "模型网关需要实现哪些能力与配置字段？",
+    "priority": "high",
+    "reason_to_investigate": "任务 3 要求构建 MG-01/02，需先梳理详细方案中对模型网关的接口、配置、审计指标的规定，才能设计服务与数据结构。",
+    "findings": [
+        {
+            "file": "详细方案.md",
+            "lines": "58-120",
+            "summary": "功能清单明确 MG-01 必须转发 `/v1/chat/completions`、支持权重路由、熔断与计费；MG-02 要求热增删端点、模型名映射、温度/超时/重试动态配置。"
+        },
+        {
+            "file": "详细方案.md",
+            "lines": "250-310",
+            "summary": "第7.6节指定模型网关需兼容 OpenAI 接口（chat completions、embeddings），并支持 `response_format={\"type\":\"json_object\"}`，同时与配置中心 `/api/config/models` 联动进行端点增删与熔断控制。"
+        },
+        {
+            "file": "项目需求.md",
+            "lines": "40-110",
+            "summary": "需求表中 MG-01/02 的验收指标包括可路由至本地 Ollama 与云端端点、错误重试、延迟/成本记录，说明需要对每次调用统计 tokens/耗时/成本并入库审计。"
+        },
+        {
+            "file": "项目需求.md",
+            "lines": "307-360",
+            "summary": "决策总账与模型调用审计表需记录 actor_model、checker_model、调用 JSON 存证位置等字段，提示模型网关应返回调用 ID 并写入 LLM 调用审计。"
+        },
+        {
+            "file": "docs/重构计划.md",
+            "lines": "18-40",
+            "summary": "任务 3 备注强调统一模型路由、提示词与调用审计，说明模型网关应提供可复用客户端给 Actor/Checker 并输出统一日志。"
+        }
+    ],
+    "conclusion": "模型网关需提供 OpenAI 兼容 API，支持多端点权重路由、熔断、温度/超时/重试配置、成本统计，并与配置中心和审计表协同。应为每次调用生成唯一 ID，记录模型、端点、耗时、token、成本等信息，为 Actor/Checker 与 Decision Ledger 提供引用。",
+    "next_steps": "设计 `ModelEndpoint` 配置结构及存储方案，定义网关服务接口（FastAPI 或内部客户端），并规划调用审计 ORM 表；同时评估依赖（httpx、tenacity）以实现重试与熔断。"
+}

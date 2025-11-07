@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from llm_trader.config import get_settings
@@ -13,6 +14,7 @@ from .alerts import TradingAlertService
 from .orchestrator import TradingCycleConfig, run_ai_trading_cycle
 from .policy import RiskDecision, RiskPolicy, RiskThresholds
 from .session import TradingSession
+from llm_trader.db.models.enums import DecisionStatus
 
 
 @dataclass
@@ -30,6 +32,10 @@ def run_managed_trading_cycle(
     trading_session: Optional[TradingSession] = None,
     quotes: Optional[List[Dict[str, object]]] = None,
     observation_id: Optional[str] = None,
+    observation: Optional[object] = None,
+    actor_service=None,
+    checker_service=None,
+    decision_service=None,
     **kwargs: Any,
 ) -> ManagedTradingResult:
     """运行带风险控制的交易循环。"""
@@ -53,12 +59,46 @@ def run_managed_trading_cycle(
         trading_session=trading_session,
         quotes=quotes,
         observation_id=observation_id,
+        observation=observation,
+        actor_service=actor_service,
+        checker_service=checker_service,
+        decision_service=decision_service,
         **kwargs,
     )
     session: TradingSession = result["session"]
     equity_curve = session.account.equity_curve
     positions = session.snapshot_positions()
     decision = policy.evaluate(equity_curve, positions)
+    if decision_service and result.get("decision"):
+        actor_decision = result["decision"]
+        decision_id = actor_decision.decision_id
+        evaluated_at = datetime.now(tz=timezone.utc)
+        risk_record = decision_service.record_risk_result(
+            decision_id=decision_id,
+            passed=decision.proceed,
+            reasons=list(decision.alerts),
+            corrections=[],
+            evaluated_at=evaluated_at,
+        )
+        result["risk_record"] = risk_record
+        observation_ref = (
+            actor_decision.observations_ref
+            or observation_id
+            or result.get("observation_id")
+            or ""
+        )
+        if observation_ref:
+            status = DecisionStatus.EXECUTED if decision.proceed else DecisionStatus.REJECTED_RISK
+            ledger_record = decision_service.record_ledger(
+                decision_id=decision_id,
+                observation_id=observation_ref,
+                actor_model=config.llm_model,
+                checker_model=config.llm_model,
+                status=status,
+                risk_summary={"alerts": decision.alerts, "proceed": decision.proceed},
+                executed_at=evaluated_at if decision.proceed else None,
+            )
+            result["decision_ledger"] = ledger_record
     if not decision.proceed:
         alert = TradingAlertService(AlertEmitter(channel=get_settings().monitoring.channel))
         reason = "; ".join(decision.alerts) if decision.alerts else "风控阈值触发"

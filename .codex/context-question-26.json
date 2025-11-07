@@ -1,0 +1,23 @@
+{
+    "question": "Actor/Checker 服务层如何与模型网关及审计串联？当前阻塞点是什么？",
+    "why_important": "Actor 决策与 Checker 审单是决策链路核心环节，需与模型网关、Pydantic Schema、审计表打通后才能替换旧 orchestrator 逻辑。",
+    "inspection": {
+        "files_reviewed": [
+            "src/llm_trader/decision/actor.py",
+            "src/llm_trader/decision/checker.py",
+            "src/llm_trader/decision/schema.py",
+            "tests/decision/test_actor_service.py",
+            "tests/decision/test_checker_service.py (未找到，需补充)"
+        ],
+        "findings": [
+            "Actor/Checker 已封装 ModelGateway.chat_completions，并使用 Pydantic 校验，但 _build_messages 直接 json.dumps 可能因 datetime 导致 TypeError（单元测试已复现）。",
+            "服务层尚未写入 Decision/LLMCallAudit，也未暴露审计上下文（decision_id、trace_id）。",
+            "Trading orchestrator 仍调用旧的 LLMStrategyGenerator，与新版 Actor/Checker 尚未集成。"
+        ]
+    },
+    "next_actions": [
+        "修复 Actor/Checker _build_messages 时间序列化问题，确保 tests/decision/test_actor_service.py 通过。",
+        "定义调用审计接口：在生成/审单之后将结果写入 Decision、CheckerResult、LLMCallAudit（需确认 session 流程）。",
+        "规划 orchestrator 重构：在生成观测后调用 ActorService.generate_decision -> CheckerService.review -> 风控；梳理所需依赖与接口。"
+    ]
+}

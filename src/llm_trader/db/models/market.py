@@ -5,6 +5,7 @@ from __future__ import annotations
 """
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Column, DateTime, Float, Integer, String, UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -84,7 +85,7 @@ class AccountPosition(SQLModel, table=True):
     __tablename__ = "account_positions"
     __table_args__ = (UniqueConstraint("captured_at", "symbol", name="uq_account_positions"),)
 
-    id: int | None = Field(
+    id: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, primary_key=True, autoincrement=True),
         description="自增主键",

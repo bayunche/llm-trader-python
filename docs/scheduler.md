@@ -2,8 +2,8 @@
 
 > 更新时间：2025-11-05 ｜ 执行者：Codex
 
-- 统一入口 `python app.py` 会自动加载 `config/scheduler.prod.json`，默认每 5 分钟运行一次自动交易循环；仍可在其他场景下单独使用 `scripts/run_scheduler.py`。
-- 典型配置示例（与 `config/scheduler.prod.json` 一致）：
+- 统一入口 `python app.py` 会在缺失配置时自动生成 `config/scheduler.prod.json`（基于环境变量），默认按照 `TRADING_SCHEDULER_INTERVAL`（默认 60 分钟）运行自动交易循环，可继续通过 `scripts/run_scheduler.py` 单独启动。
+- 典型配置示例（与最新 `config/scheduler.prod.json` 一致）：
 
 ```json
 {
@@ -13,21 +13,36 @@
       "id": "realtime-quotes",
       "callable_path": "llm_trader.tasks.realtime.fetch_realtime_quotes",
       "trigger": "interval",
-      "interval_minutes": 5,
-      "kwargs": {"symbols": ["600000.SH", "000001.SZ"]}
+      "interval_minutes": 60,
+      "kwargs": {}
+    },
+    {
+      "id": "account-snapshot",
+      "callable_path": "llm_trader.tasks.managed_cycle.sync_account_snapshot",
+      "trigger": "interval",
+      "interval_minutes": 60,
+      "kwargs": {"symbol_universe_limit": 200}
     },
     {
       "id": "managed-trading",
       "callable_path": "llm_trader.tasks.managed_cycle.run_cycle",
       "trigger": "interval",
-      "interval_minutes": 5,
+      "interval_minutes": 60,
       "kwargs": {
         "config": {
           "session_id": "session-demo",
           "strategy_id": "strategy-demo",
-          "symbols": ["600000.SH"],
-          "objective": "自动调度",
-          "history_start": "2024-01-01T00:00:00"
+          "symbols": [],
+          "objective": "自动交易",
+          "indicators": ["sma", "ema"],
+          "freq": "D",
+          "initial_cash": 1000000.0,
+          "llm_model": "gpt-4.1-mini",
+          "only_latest_bar": true,
+          "symbol_universe_limit": 200,
+          "execution_mode": "sandbox",
+          "selection_metric": "amount",
+          "lookback_days": 120
         }
       }
     }
@@ -35,7 +50,8 @@
 }
 ```
 
-- 如需自定义配置，可设置 `LLM_TRADER_SCHEDULER_CONFIG=/path/to/custom.json` 后运行 `python app.py`；或单独执行：
+- `realtime-quotes` 任务在未提供 `symbols` 时会自动拉取最新标的池；`account-snapshot` 负责刷新账户资金与持仓，供观测构建和仪表盘使用。
+- 可执行 `env PYTHONPATH=src python scripts/run_managed_scheduler.py --export-config config/scheduler.prod.json` 手动导出最新配置；亦可设置 `LLM_TRADER_SCHEDULER_CONFIG=/path/to/custom.json` 后运行 `python app.py` 或执行：
 
 ```bash
 python scripts/run_scheduler.py custom_scheduler.json

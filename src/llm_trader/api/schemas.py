@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -186,3 +186,50 @@ class TradingRunHistoryItem(BaseModel):
 
 class TradingRunHistoryResponse(APIResponse[List[TradingRunHistoryItem]]):
     pass
+
+
+class ModelEndpointItem(BaseModel):
+    model_alias: str
+    provider: str
+    endpoint_url: str
+    auth_type: str
+    auth_secret_ref: str
+    weight: float
+    timeout: float
+    max_retries: int
+    enabled: bool
+    default_params: Dict[str, Any]
+    headers: Dict[str, Any]
+    circuit_breaker: Dict[str, Any]
+    prompt_cost_per_1k: float
+    completion_cost_per_1k: float
+    created_at: datetime
+    updated_at: datetime
+
+
+class ModelEndpointListResponse(APIResponse[List[ModelEndpointItem]]):
+    pass
+
+
+class ModelEndpointResponse(APIResponse[ModelEndpointItem]):
+    pass
+
+
+class ModelEndpointMetric(BaseModel):
+    endpoint: str
+    enabled: bool
+    available: bool
+    success_count: int
+    failure_count: int
+    consecutive_failures: int
+    opened_until: Optional[datetime]
+    last_error: Optional[str]
+
+
+class ModelEndpointMetricsResponse(APIResponse[List[ModelEndpointMetric]]):
+    pass
+
+
+ModelEndpointListResponse.model_rebuild()
+ModelEndpointResponse.model_rebuild()
+ModelEndpointMetricsResponse.model_rebuild()

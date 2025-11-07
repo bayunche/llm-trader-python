@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "《项目需求.md》第5-7章明确了 Observation、Decision、Risk Gate、执行、审计与管理接口的输入输出字段，可据此定义服务契约与 API/事件模型。"
+    "notes": "DataIngestionService/ObservationBuilder/run_cycle 链路明确；ParquetRepository 写入接口需遵循 DatasetConfig（freq/symbol 分区、列名规范）；模型网关、ActorService、CheckerService 的 JSON Schema 与数据库审计字段已在《项目需求.md》第5.2-5.5节梳理。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "确认以 Python 3.10、FastAPI、Streamlit 继续实现业务层，存储改为 PostgreSQL（取代 Parquet/DuckDB），并结合 SQLModel/SQLAlchemy 处理 ORM 与迁移。"
+    "notes": "继续使用 Python 3.10、FastAPI、SQLModel、Redis；模型网关沿用 httpx + 自研熔断统计，Actor/Checker 使用 Pydantic 校验与 ModelGateway 调用；SQLModel 类型统一采用 SQLAlchemy Column(Integer/Float)。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "全面重构涉及数据迁移、服务拆分、实时风控与执行一致性；需防止 Actor/Checker 超时、数据库热点、容器编排复杂度及统一启动失败。"
+    "notes": "主要风险：SQLModel 字段类型若仍不一致会阻断 pytest；ParquetRepository 写入方法若列名不匹配会导致数据质量测试失败；Actor/Checker JSON dumps 对 datetime 处理需要兜底；模型网关熔断与配置 API 引入后必须避免循环依赖与状态不一致。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "计划构建分层测试：数据库迁移与仓储单测、Actor/Checker/Risk Gate 流程集成测试、API 与仪表盘冒烟；通过 docker-compose 集成 PG，使用 pytest 完整执行。"
+    "notes": "先运行 env PYTHONPATH=src python -m pytest 定位/验证 SQLModel 与数据仓储修复；为 Actor/Checker 服务补充单测覆盖 datetime/审计场景；API 层使用 TestClient 覆盖模型配置与 metrics，另通过 compileall 保证语法。"
   },
   "status": "ready_for_planning"
 }

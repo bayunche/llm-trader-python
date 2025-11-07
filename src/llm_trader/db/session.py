@@ -9,7 +9,6 @@ from typing import Callable, ContextManager, Optional
 
 from sqlmodel import Session
 
-from llm_trader.config import get_settings
 from .base import get_engine
 
 
@@ -18,6 +17,8 @@ def session_scope(*, echo: Optional[bool] = None) -> ContextManager[Session]:
     """
     提供数据库会话上下文，自动提交或回滚。
     """
+
+    from llm_trader.config import get_settings
 
     settings = get_settings().database
     engine = get_engine(

@@ -236,10 +236,20 @@ docker compose -f docker-compose.prod.yml up --build
 
 ## ✅ 质量保证
 
-- 统一使用 `env PYTHONPATH=src python -m pytest` 运行测试
+- 推荐的测试流程：
+  1. `env PYTHONPATH=src python3 -m pytest tests/decision tests/trading tests/tasks -q`（核心决策链路）
+  2. `env PYTHONPATH=src python3 -m pytest tests/pipeline/test_auto.py -q`（自动化管线）
+  3. `env PYTHONPATH=src python3 -m pytest tests/api/test_config_models.py -q`（配置中心）
+  4. 在具备 PostgreSQL/Redis 的环境中执行 `env PYTHONPATH=src python3 -m pytest`，若仅有 SQLite 可使用 `PYTEST_ADDOPTS="--maxfail=1 --timeout=300"` 并预期 `tests/decision/test_decision_service.py` 因 JSONB 跳过。
+  5. 数据回归：`env PYTHONPATH=src python3 -m pytest tests/data/test_trading_repository.py tests/data/regression/test_data_quality.py tests/data/test_symbols_pipeline.py -q`，验证 Parquet 仓储与多级降级策略。
+- 运行前请确保本地或容器内提供 PostgreSQL（支持 JSONB）与 Redis；若使用 docker，可执行 `docker compose -f docker-compose.prod.yml up -d postgres redis`。
 - 重点回归：`tests/data/regression/test_data_quality.py`、`tests/trading/test_manager.py`
 - 文档与验证记录：`verification.md`、`.codex/testing.md`
 - Health Check：`env PYTHONPATH=src python scripts/healthcheck.py`
+- 离线/受限环境：
+  - 使用 `env PYTHONPATH=.codex/vendor:src ...` 引入仓库随附的第三方依赖；如需额外包，请将对应 wheel/tarball 置于 `.codex/vendor/` 后执行 `python3 -m pip install --no-index --find-links .codex/vendor -r requirements.dev.txt`。
+  - 当前缺少 `httpx==0.27.2` 的离线包，需提前下载或调整 requirements；否则请在具备外网的环境完成一次 `pip download` 并缓存。
+  - 长耗时 pytest 可按模块分批执行，并为全量回归设置 `PYTEST_ADDOPTS="--maxfail=1 --timeout=600 --durations=10"` 观察慢用例，必要时在 `tests/data` 引入固定数据以避免外部请求。
 
 ---
 

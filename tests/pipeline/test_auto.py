@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from llm_trader.config import get_settings
 from llm_trader.pipeline.auto import BacktestCriteria, AutoTradingConfig, run_full_automation
 from llm_trader.trading import TradingCycleConfig, ManagedTradingResult, TradingSession, TradingSessionConfig, RiskDecision
 from llm_trader.strategy.llm_generator import LLMStrategySuggestion
@@ -65,6 +66,7 @@ def _load_mock_bars(*_args, **_kwargs):
 def test_full_automation_executes(tmp_path: Path, monkeypatch) -> None:
     base_dir = tmp_path / "data_store"
     monkeypatch.setenv("DATA_STORE_DIR", str(base_dir))
+    get_settings.cache_clear()
     config = AutoTradingConfig(
         trading=TradingCycleConfig(
             session_id="session",
@@ -115,7 +117,10 @@ def test_full_automation_executes(tmp_path: Path, monkeypatch) -> None:
     result = run_full_automation(config, load_ohlcv_fn=_load_mock_bars)
     assert result.status == "executed"
     assert result.backtest_metrics is not None
-    assert result.report_paths is None
+    if result.report_paths:
+        assert "manifest" in result.report_paths
+        for attachment in result.report_paths.values():
+            assert attachment.exists()
     runs_path = base_dir / "trading" / "runs" / "strategy=strategy" / "session=session" / "runs.parquet"
     assert runs_path.exists()
     df = pd.read_parquet(runs_path)
@@ -126,6 +131,7 @@ def test_full_automation_executes(tmp_path: Path, monkeypatch) -> None:
 
 def test_full_automation_rejects_on_backtest(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_STORE_DIR", str(tmp_path / "data_store"))
+    get_settings.cache_clear()
     config = AutoTradingConfig(
         trading=TradingCycleConfig(
             session_id="session",

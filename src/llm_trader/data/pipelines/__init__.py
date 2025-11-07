@@ -3,6 +3,7 @@
 from .calendar import TradingCalendarPipeline
 from .client import EastMoneyClient
 from .fundamentals import FundamentalsPipeline
+from .accounts import AccountSnapshotPipeline
 from .ohlcv import OhlcvPipeline
 from .symbols import SymbolsPipeline
 from .realtime_quotes import RealtimeQuotesPipeline
@@ -14,4 +15,5 @@ __all__ = [
     "OhlcvPipeline",
     "FundamentalsPipeline",
     "RealtimeQuotesPipeline",
+    "AccountSnapshotPipeline",
 ]

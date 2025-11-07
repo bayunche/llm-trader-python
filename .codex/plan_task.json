@@ -1,22 +1,37 @@
 {
   "status": "manual_substitute",
   "reason": "shrimp-task-manager 工具缺失，人工执行计划分析。",
-  "summary": "针对“确认项目进行到哪个阶段”需求，手动规划调研、验证与汇报步骤。",
+  "summary": "围绕重构计划任务 3，当前迭代需完成 SQLModel 类型修复、Actor/Checker 服务串联、模型网关熔断/配置接口完善，以及补全 Parquet 数据仓储写入并恢复 pytest。",
   "milestones": [
     {
-      "name": "P1 收集阶段证据",
-      "goal": "梳理开发计划与仓库代码，归档各阶段交付物与测试位置。",
+      "name": "M0 SQLModel 修复",
+      "goal": "统一 Integer/Float 字段映射，确保 SQLModel 元数据与 Alembic 一致，并让 pytest 正常收集。",
       "dependencies": []
     },
     {
-      "name": "P2 完成度评估",
-      "goal": "逐项对照 Phase A/B/C 子任务，确认实际落地情况与缺口。",
-      "dependencies": ["P1 收集阶段证据"]
+      "name": "M1 设计对齐",
+      "goal": "梳理模型网关、Actor/Checker 的接口与数据模型，输出设计草案与依赖清单。",
+      "dependencies": ["M0 SQLModel 修复"]
     },
     {
-      "name": "P3 输出项目阶段结论",
-      "goal": "整理证据、风险与后续建议，形成可追溯报告并准备最终答复。",
-      "dependencies": ["P2 完成度评估"]
+      "name": "M2 模型网关实现",
+      "goal": "完善 OpenAI 兼容网关，补齐熔断统计、指标暴露与配置中心接口，对接文档指引。",
+      "dependencies": ["M1 设计对齐"]
+    },
+    {
+      "name": "M3 Actor/Checker 服务",
+      "goal": "构建 Actor/Checker 服务层与 Pydantic 校验，修复序列化问题并串联调用审计/数据库记录。",
+      "dependencies": ["M1 设计对齐", "M2 模型网关实现"]
+    },
+    {
+      "name": "M4 集成与验证",
+      "goal": "将新服务接入 orchestrator/manager，补充测试与文档，并跑通 pytest 回归。",
+      "dependencies": ["M2 模型网关实现", "M3 Actor/Checker 服务"]
+    },
+    {
+      "name": "M5 数据仓储补全",
+      "goal": "补齐 ParquetRepository 写入接口、修复测试依赖并执行数据层回归。",
+      "dependencies": ["M0 SQLModel 修复"]
     }
   ]
 }

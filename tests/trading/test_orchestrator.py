@@ -16,6 +16,7 @@ from llm_trader.data.repositories.parquet import ParquetRepository
 from llm_trader.strategy.llm_generator import LLMStrategySuggestion
 from llm_trader.strategy.logger import LLMStrategyLogRepository
 from llm_trader.strategy.engine import RuleConfig
+from llm_trader.decision import ActorDecisionPayload, CheckerResultPayload
 from llm_trader.trading import (
     TradingCycleConfig,
     TradingSession,
@@ -255,6 +256,128 @@ def test_run_ai_trading_cycle_uses_provided_quotes(monkeypatch: pytest.MonkeyPat
 
     assert result["quotes"]
     assert pipeline.calls == []
+
+
+def test_run_ai_trading_cycle_records_actor_decision(monkeypatch: pytest.MonkeyPatch) -> None:
+    history = [
+        {
+            "symbol": "600000.SH",
+            "dt": datetime(2024, 1, 1, 9, 30),
+            "freq": "D",
+            "open": 10.0,
+            "high": 10.2,
+            "low": 9.8,
+            "close": 10.1,
+            "volume": 100000,
+            "amount": 1000000,
+        }
+    ]
+
+    def fake_load(symbols, freq, start, end):
+        return history
+
+    generator = FakeGenerator(
+        [
+            RuleConfig(
+                indicator="sma",
+                column="close",
+                params={"window": 1},
+                operator=">",
+                threshold=9.0,
+            )
+        ]
+    )
+
+    class StubActorService:
+        def __init__(self) -> None:
+            self.called = False
+
+        def generate_decision(self, observation, *, context):
+            self.called = True
+            return ActorDecisionPayload.model_validate(
+                {
+                    "decision_id": "dec-stub",
+                    "timestamp": "2025-01-01T09:30:00Z",
+                    "observations_ref": "obs-stub",
+                    "account_view": {"nav": 1_000_000.0, "cash": 500_000.0},
+                    "actions": [
+                        {
+                            "type": "place_order",
+                            "symbol": "600000.SH",
+                            "side": "buy",
+                            "order_type": "limit",
+                            "price": 10.5,
+                            "qty": 100,
+                            "tif": "day",
+                        }
+                    ],
+                }
+            )
+
+    class StubCheckerService:
+        def review(self, observation, decision, *, context):
+            return CheckerResultPayload.model_validate(
+                {
+                    "pass": True,
+                    "reasons": [],
+                    "observation_expired": False,
+                    "conflicts": [],
+                    "checked_at": "2025-01-01T09:30:05Z",
+                }
+            )
+
+    class StubDecisionService:
+        def __init__(self) -> None:
+            self.called_with = None
+
+        def record(self, *, observation_id, actor_result, checker_result):
+            self.called_with = {
+                "observation_id": observation_id,
+                "decision_id": actor_result.decision_id,
+                "checker_passed": checker_result.passed if checker_result else None,
+            }
+            return SimpleNamespace(decision_id=actor_result.decision_id)
+
+    actor_service = StubActorService()
+    checker_service = StubCheckerService()
+    decision_service = StubDecisionService()
+
+    observation = {
+        "observation_id": "obs-input",
+        "generated_at": "2025-01-01T09:29:59Z",
+        "valid_ttl_ms": 3000,
+        "clock": {"phase": "continuous_trading"},
+        "account": {"nav": 1_000_000.0, "cash": 500_000.0},
+        "positions": [],
+        "universe": ["600000.SH"],
+        "features": {},
+        "market_rules": {},
+        "risk_snapshot": {"posture": "normal"},
+    }
+
+    result = run_ai_trading_cycle(
+        TradingCycleConfig(
+            session_id="session",
+            strategy_id="strategy",
+            symbols=["600000.SH"],
+            objective="测试",
+            indicators=("sma",),
+            history_start=datetime(2024, 1, 1),
+        ),
+        generator=generator,
+        quotes=[{"symbol": "600000.SH", "last_price": 10.5}],
+        load_ohlcv_fn=fake_load,
+        actor_service=actor_service,
+        checker_service=checker_service,
+        decision_service=decision_service,
+        observation=observation,
+    )
+
+    assert actor_service.called is True
+    assert result["decision"] is not None
+    assert result["decision"].decision_id == "dec-stub"
+    assert decision_service.called_with is not None
+    assert decision_service.called_with["observation_id"] == "obs-stub"
 
 
 def test_run_ai_trading_cycle_live_mode_raises(tmp_path: Path) -> None:

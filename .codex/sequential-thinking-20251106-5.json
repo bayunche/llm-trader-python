@@ -1,0 +1,21 @@
+{
+    "timestamp": "2025-11-06T13:38:20+08:00",
+    "任务理解": "把 Actor/Checker 服务接入 orchestrator：观测生成后调用 ActorService、CheckerService，写入 Decision/Action/CheckerResult/LLMCallAudit，并更新 docs/重构计划.md。",
+    "关键要点": [
+        "orchestrator 当前仍使用 LLMStrategyGenerator 生成规则，需要改为调用模型网关 Actor/Checker。",
+        "数据库模型（Decision、DecisionAction、CheckerResult 等）已存在，但缺少服务层写入逻辑。",
+        "需要确保模型调用与审计贯通，并兼容 existing trading session/manager 流程。",
+        "tests/trading/test_orchestrator.py 等需同步调整，新增 Actor/Checker 行为测试。"
+    ],
+    "风险": [
+        "引入数据库写操作可能与现有 stub session 冲突，需设计可注入的 repository 或使用事务封装。",
+        "Actor/Checker 服务依赖模型网关，需要在 orchestrator 中 mock 出 stub，避免单测调用实际 API。",
+        "Decision/Action 表写入需处理重复/幂等，否则多次运行可能报主键冲突。"
+    ],
+    "下一步": [
+        "梳理 orchestrator 当前数据流，确定替换/扩展点。",
+        "设计 DecisionService（或同等模块）封装 DB 写入与审计。",
+        "实现 orchestrator 调用 Actor->Checker->Risk -> Execution 的链路，保留 fallback。",
+        "更新 tests/trading/test_orchestrator.py / 新增决策服务单测，最后刷新 docs/重构计划.md。"
+    ]
+}

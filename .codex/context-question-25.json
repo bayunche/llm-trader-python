@@ -1,0 +1,22 @@
+{
+    "question": "哪些 SQLModel 整数/浮点字段仍然引发 pytest 失败？如何统一 Column 定义以恢复测试？",
+    "why_important": "pytest 当前无法跑通，阻塞后续 Actor/Checker 与模型网关改造，需要先确保 ORM 层稳定。",
+    "inspection": {
+        "files_reviewed": [
+            "src/llm_trader/db/models/core.py",
+            "src/llm_trader/db/models/audit.py",
+            "src/llm_trader/db/models/market.py",
+            "src/llm_trader/db/models/reference.py"
+        ],
+        "notes": [
+            "主要实体均已使用 Column(Integer/Float, nullable=...) 包装，但需要确认 Alembic 与 SQLModel 元数据是否同步。",
+            "tests/model_gateway/test_service.py 之前因 SQLAlchemy 方言错误失败，需要复现具体报错定位字段。",
+            "尚未执行 pytest，再次运行后可定位具体字段并补充迁移或字段类型。"
+        ]
+    },
+    "next_actions": [
+        "运行 env PYTHONPATH=src python -m pytest 观察当前失败栈，确认引发错误的表与字段。",
+        "根据报错字段检查对应 SQLModel 定义，必要时改用 Column(Numeric) 或确保 default/type 一致。",
+        "补充/更新 Alembic 迁移脚本，并回归相关单元测试。"
+    ]
+}

@@ -5,23 +5,38 @@
       "id": "realtime-quotes",
       "callable_path": "llm_trader.tasks.realtime.fetch_realtime_quotes",
       "trigger": "interval",
-      "interval_minutes": 5,
+      "interval_minutes": 60,
+      "kwargs": {}
+    },
+    {
+      "id": "account-snapshot",
+      "callable_path": "llm_trader.tasks.managed_cycle.sync_account_snapshot",
+      "trigger": "interval",
+      "interval_minutes": 60,
       "kwargs": {
-        "symbols": ["600000.SH", "000001.SZ"]
+        "symbol_universe_limit": 200
       }
     },
     {
       "id": "managed-trading",
       "callable_path": "llm_trader.tasks.managed_cycle.run_cycle",
       "trigger": "interval",
-      "interval_minutes": 5,
+      "interval_minutes": 60,
       "kwargs": {
         "config": {
           "session_id": "session-demo",
           "strategy_id": "strategy-demo",
-          "symbols": ["600000.SH"],
-          "objective": "自动调度",
-          "history_start": "2024-01-01T00:00:00"
+          "symbols": [],
+          "objective": "自动交易",
+          "indicators": ["sma", "ema"],
+          "freq": "D",
+          "initial_cash": 1000000.0,
+          "llm_model": "gpt-4.1-mini",
+          "only_latest_bar": true,
+          "symbol_universe_limit": 200,
+          "execution_mode": "sandbox",
+          "selection_metric": "amount",
+          "lookback_days": 120
         }
       }
     }

@@ -1,0 +1,20 @@
+{
+    "timestamp": "2025-11-06T14:10:12+08:00",
+    "任务理解": "收尾任务：1) 更新文档与配置中心（详细方案.md、项目需求.md、重构计划.md）反映 Actor/Checker/Risk 集成、API 路由；2) 设计全量 pytest 稳定运行策略（依赖准备、时间/分组方案、跳过策略）。",
+    "已知": [
+        "docs/monitoring.md、重构计划.md 已初步更新，但详细方案.md 与项目需求.md 尚未同步最新链路与 API。",
+        "配置中心 API 上线（tests/api/test_config_models.py），需在文档中补充端点说明与使用示例。",
+        "全量 pytest 在 120s 超时失败，需要梳理依赖（数据库/Redis/sqlmodel JSONB）与测试分层策略。"
+    ],
+    "关键疑问": [
+        "文档中需补充哪些具体章节（风险链路、配置中心、运行指南）？",
+        "pytest 稳定策略中，是否要引入 docker-compose 或 make target？如何处理 sqlite JSONB 限制？",
+        "是否要在 docs/monitoring.md / README.md 中加入新的测试指南？"
+    ],
+    "初步计划": [
+        "查阅 详细方案.md、项目需求.md 中风险与配置中心章节，更新最新 API、服务层集成与数据流。",
+        "在 docs/monitoring.md 或 README 中添加配置中心操作步骤、ReportWriter 路径说明。",
+        "撰写 `docs/testing.md` 或 README 测试部分：列出必要依赖（PostgreSQL/Redis）、准备脚本、分组命令（单元→集成→慢测），并说明如何跳过 JSONB 测试或映射到 PostgreSQL。",
+        "在 `.codex/testing.md` 记录新的测试策略；若可能，补充脚本或 make 目标示例。"
+    ]
+}

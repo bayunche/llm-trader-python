@@ -45,3 +45,35 @@
   - 成交流水原始数据可直接在页面查看并下载。
 
 > 若需接入真实告警终端（如钉钉、邮件、Slack），可在 `AlertEmitter` 上扩展；健康检查脚本后续也可升级为 FastAPI 路由以支持 HTTP 探针。
+
+## 模型网关配置与指标
+
+- 接口统一以 `X-API-Key` 进行鉴权，需在 `.env` 中设置 `LLM_TRADER_API_KEY`。
+- **端点列表**：`GET /api/config/models`
+  - 返回字段 `model_alias`、`provider`、`endpoint_url`、`weight`、`timeout`、`circuit_breaker`、`prompt_cost_per_1k` 等。
+  - 用于查看当前生效的模型端点配置，响应格式为 `{"code": "OK", "data": [...]}`。
+- **新增/更新端点**：`PUT /api/config/models`
+  - 请求体字段与列表响应一致，支持热更新，调用成功后网关自动刷新缓存。
+  - 可用于调整权重、熔断阈值、超时、成本估算等参数。
+- **熔断指标**：`GET /api/config/models/metrics`
+  - 返回每个端点的 `available`、`success_count`、`failure_count`、`consecutive_failures`、`opened_until`（UTC 时间）与 `last_error`。
+  - 可结合 Prometheus 或内部监控周期获取，推荐在仪表盘中展示。
+- 所有响应遵循 `ModelEndpointListResponse`/`ModelEndpointResponse`/`ModelEndpointMetricsResponse` 的包装格式，便于前端/脚本统一解析。
+
+## 决策审计与风险指标
+
+- **数据库表**：
+  - `decisions` / `decision_actions`：Actor 输出及动作明细。
+  - `checker_results`：Checker 审单结论（pass/fail、原因、冲突）。
+  - `risk_results`：Risk Gate 通过与告警列表。
+  - `decision_ledger`：对外审计视图，记录 `observation_ref`、模型版本、风险摘要、执行结果与时间。
+  - `llm_call_audit`：模型调用 trace（trace_id、provider、token 使用、延迟、成本）。
+- **日志关联**：所有环节使用 `decision_id`、`trace_id` 串联，可在日志平台按 `decision_id=<value>` 追踪 Actor → Checker → Risk → Execution。
+- **访问方式**：
+  - SQL 查询示例：`SELECT status, actor_model, checker_model, risk_summary FROM decision_ledger ORDER BY created_at DESC LIMIT 20;`
+  - 计划中的 REST/WS（后续迭代）：`GET /api/trading/decisions`、`GET /api/trading/decisions/{id}`、`WS /api/ws/decisions`，返回上述数据结构。
+  - `reports/strategy=<id>/session=<id>/<timestamp>/manifest.json` 中记录 `decision_id`、风险结论、生成时间，可用于 Runbook 与合规审查。
+- **Prometheus 指标建议**：
+  - `decision_latency_ms{stage=actor|checker|risk|exec}`：各阶段耗时。
+  - `decision_status_total{status}`：executed / rejected_checker / rejected_risk 的数量。
+  - `risk_alert_total{reason}`：Risk Gate 告警分布（需从日志或 `risk_results` 表聚合导出）。

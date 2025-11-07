@@ -3,45 +3,67 @@
   "reason": "shrimp-task-manager 工具缺失，人工完成技术可行性分析。",
   "domains": [
     {
-      "area": "Phase 状态确认",
-      "feasibility": "高",
-      "assumptions": [
-        "开发计划.md 中的阶段描述与仓库提交保持同步。",
-        "operations-log.md 可辅助确认历史操作记录。"
-      ],
-      "risks": [
-        "计划文档未及时更新，导致判断失真"
-      ],
-      "mitigations": [
-        "结合源码与测试验证，以代码证据为准，出现冲突时在结论中说明。"
-      ]
-    },
-    {
-      "area": "代码证据收集",
-      "feasibility": "高",
-      "assumptions": [
-        "关键模块（监控、数据质量、仪表盘）在仓库内具备可读源码。",
-        "测试用例能够反映已落地的交付物。"
-      ],
-      "risks": [
-        "存在未合并分支或私有模块导致证据缺失"
-      ],
-      "mitigations": [
-        "通过搜索与 cross-reference 验证，若缺失则在报告中列出信息缺口。"
-      ]
-    },
-    {
-      "area": "风险与后续建议",
+      "area": "SQLModel 类型修复",
       "feasibility": "中高",
       "assumptions": [
-        "可以根据缺失功能推导出后续工作建议。",
-        "现有测试与文档能证明已完成范围。"
+        "现有 SQLModel 定义已集中在 db/models 下，可逐一核对 Integer/Float 对应的 Column 定义。",
+        "pytest 报错信息能明确指出受影响的表字段。"
       ],
       "risks": [
-        "缺少定量性能指标，难以界定 Phase C3 的完成标准"
+        "字段类型调整可能与 Alembic 迁移不一致导致运行期异常。",
+        "部分字段可能需要 Decimal/NUMERIC 支持以保持精度。"
       ],
       "mitigations": [
-        "在结论中阐明缺乏指标的风险，并提出需要明确验收标准的建议。"
+        "对照迁移脚本和现有测试夹具，必要时同步更新迁移或提供兼容转换。",
+        "为高精度字段引入 Decimal 或保留 Float 并在文档中解释，确保测试覆盖。"
+      ]
+    },
+    {
+      "area": "Actor/Checker 服务整合",
+      "feasibility": "中",
+      "assumptions": [
+        "ModelGateway 已支持调用审计，Actor/Checker 只需在服务层补充上下文和校验。",
+        "Pydantic Schema 能覆盖文档定义的 JSON 结构并提供 json 模式导出。"
+      ],
+      "risks": [
+        "datetime/Decimal 等类型在构建 Prompt 时可能影响 json.dumps。",
+        "与 Decision/CheckerResult ORM 的衔接需要事务管理，易出现会话冲突。"
+      ],
+      "mitigations": [
+        "使用 Pydantic 的 model_dump(mode=\"json\") 或自定义序列化器处理 datetime。",
+        "封装服务层接口，将数据库写入与模型调用分离，便于测试和错误恢复。"
+      ]
+    },
+    {
+      "area": "模型网关熔断与配置 API",
+      "feasibility": "中",
+      "assumptions": [
+        "现有 ModelGateway 已有熔断统计与 metrics 快照基础。",
+        "FastAPI 路由 `/api/config/models` 已建立，可扩展 PUT/GET/metrics 行为。"
+      ],
+      "risks": [
+        "metrics 需要序列化 datetime 等类型，可能产生 JSON 兼容性问题。",
+        "配置刷新依赖全局 gateway 实例，需避免并发访问造成旧配置残留。"
+      ],
+      "mitigations": [
+        "在 metrics 接口中统一转换时间字段，并为 gateway 添加线程安全更新策略。",
+        "编写 API 单元测试覆盖 upsert、list、metrics 流程，确保依赖刷新成功。"
+      ]
+    },
+    {
+      "area": "Parquet 数据仓储补全",
+      "feasibility": "高",
+      "assumptions": [
+        "DatasetConfig 已提供分区与文件命名规则，可直接复用。",
+        "现有测试主要验证列名、分区结构与写入幂等性，需求清晰。"
+      ],
+      "risks": [
+        "records 中日期/时间字段格式不统一，需在写入前做解析与校验。",
+        "并发写入可能触发读写竞争，需要确认是否需锁机制。"
+      ],
+      "mitigations": [
+        "实现私有 helper 统一 parse 日期与 datetime，并在测试中覆盖多个输入类型。",
+        "短期内保持串行写入，记录潜在并发需求于文档；如必要可引入基于文件锁的保护。"
       ]
     }
   ]

@@ -1,0 +1,22 @@
+{
+    "question": "ParquetRepository 缺失的 write_ohlcv_daily/intraday 接口需遵循何种列结构与分区格式？",
+    "why_important": "数据质量与交易仓储测试直接调用该接口，若实现与 DatasetConfig 不匹配将导致 pytest 失败并阻断回归。",
+    "inspection": {
+        "files_reviewed": [
+            "src/llm_trader/data/repositories/parquet.py",
+            "src/llm_trader/data/storage.py",
+            "tests/data/regression/test_data_quality.py",
+            "tests/data/test_ohlcv_pipeline.py"
+        ],
+        "findings": [
+            "ParquetRepository 目前仅提供 write_ohlcv 通用方法，通过 freq 参数区分日线/分钟线。",
+            "数据质量回归测试直接调用 write_ohlcv_daily(symbol, freq, records)，若该方法不存在则测试报 AttributeError。",
+            "DatasetKind.OHLCV_DAILY 配置要求路径包含 freq/symbol/year/month 分区，文件名以日期命名。"
+        ]
+    },
+    "next_actions": [
+        "实现 write_ohlcv_daily，内部调用通用写入并强制 freq='D'，同时处理日期字符串转 datetime。",
+        "实现 write_ohlcv_intraday，支持分钟级 freq（如 '1m','5m'），并将 records 中时间字段统一为 datetime。",
+        "补充必要的日期/时间解析与字段齐全性校验，确保写入数据符合测试读取预期。"
+    ]
+}

@@ -1,0 +1,34 @@
+{
+    "question": "账户快照与持仓数据应由哪个调度任务写入 PostgreSQL？",
+    "priority": "high",
+    "reason_to_investigate": "ObservationBuilder 依赖最新账户资金与持仓，但当前流程中未看到自动写入快照的任务，需要明确数据来源以保证观测数据有效。",
+    "findings": [
+        {
+            "file": "src/llm_trader/data/ingestion/service.py",
+            "lines": "29-150",
+            "summary": "DataIngestionService 暴露 store_account_snapshot 方法，用于将 NAV、现金、可用余额和 positions 写入 PostgreSQL，说明采集层已经准备好写入入口。"
+        },
+        {
+            "file": "src/llm_trader/data/repositories/postgres.py",
+            "lines": "112-180",
+            "summary": "仓储实现中 store_account_snapshot 会创建 AccountSnapshot 并覆盖同时间戳的 AccountPosition，latest_account_snapshot/latest_positions 提供给 ObservationBuilder 使用。"
+        },
+        {
+            "file": "tests/data/test_postgres_repository.py",
+            "lines": "66-120",
+            "summary": "单元测试验证 store_account_snapshot 能正确持久化 RiskPosture 和 positions，意味着功能已具备，但测试层未模拟定时任务写入。"
+        },
+        {
+            "file": "scripts/run_full_pipeline.py",
+            "lines": "20-140",
+            "summary": "全流程脚本同步主表、实时行情、历史行情和观测，但没有调用 store_account_snapshot，表明账户快照目前缺少自动化步骤。"
+        },
+        {
+            "file": "项目需求.md",
+            "lines": "70-110",
+            "summary": "需求文档强调 OBS‑01 必须聚合账户/持仓/风险姿态，说明调度体系必须在观测前提供最新账户数据。"
+        }
+    ],
+    "conclusion": "账户快照写入需由单独的采集任务触发，或在 managed_cycle 前新增步骤拉取券商/模拟账户数据并调用 DataIngestionService.store_account_snapshot。当前脚本缺少该步骤，导致观测只能依赖旧数据或默认 0 值。",
+    "next_steps": "确定账户数据来源（Mock 券商或配置文件），实现一个 account_snapshot_pipeline 并在调度导出中加入对应 job；同时在 managed_cycle 或 pipeline 中调用该服务，确保 ObservationBuilder 可获取最新快照。"
+}

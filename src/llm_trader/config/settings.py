@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
+
+from llm_trader.model_gateway.config import ModelEndpointSettings, ModelGatewaySettings
 
 # python-dotenv 在尚未安装依赖时可能不可用，因此提供兜底实现
 try:
@@ -69,6 +72,16 @@ def _env_list(key: str, default: List[str]) -> List[str]:
     if raw is None or not raw.strip():
         return default
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _env_json(key: str) -> Any:
+    raw = os.getenv(key)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
 
 
 _VALID_EXECUTION_MODES = {"sandbox", "live"}
@@ -208,6 +221,65 @@ class RedisSettings:
     decode_responses: bool = field(default_factory=lambda: _env_bool("REDIS_DECODE_RESPONSES", False))
 
 
+def _load_model_endpoints(default_model: str) -> List[ModelEndpointSettings]:
+    raw = _env_json("MODEL_GATEWAY_ENDPOINTS")
+    endpoints: List[ModelEndpointSettings] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            try:
+                endpoints.append(
+                    ModelEndpointSettings(
+                        name=str(item.get("name") or f"endpoint-{len(endpoints)+1}"),
+                        base_url=str(item["base_url"]),
+                        api_key=item.get("api_key") or None,
+                        weight=float(item.get("weight", 1.0) or 1.0),
+                        timeout=float(item.get("timeout", 30.0) or 30.0),
+                        max_retries=int(item.get("max_retries", 2) or 2),
+                        enabled=bool(item.get("enabled", True)),
+                        prompt_cost_per_1k=float(item.get("prompt_cost_per_1k", 0.0) or 0.0),
+                        completion_cost_per_1k=float(item.get("completion_cost_per_1k", 0.0) or 0.0),
+                        default_params=item.get("default_params") or {},
+                        headers=item.get("headers") or {},
+                        circuit_breaker=item.get("circuit_breaker") or {},
+                        metadata=item.get("metadata") or {},
+                    )
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"MODEL_GATEWAY_ENDPOINTS 配置无效: {exc}") from exc
+    if endpoints:
+        return endpoints
+
+    fallback_url = _getenv("MODEL_GATEWAY_FALLBACK_BASE_URL", "") or _getenv("TRADING_LLM_BASE_URL", "")
+    if fallback_url:
+        endpoints.append(
+            ModelEndpointSettings(
+                name="default",
+                base_url=fallback_url,
+                api_key=_getenv("MODEL_GATEWAY_API_KEY", os.getenv("OPENAI_API_KEY", "")) or None,
+                weight=1.0,
+                timeout=float(_getenv("MODEL_GATEWAY_TIMEOUT", "30")),
+                max_retries=int(_getenv("MODEL_GATEWAY_MAX_RETRIES", "2")),
+                default_params={},
+                headers={},
+                circuit_breaker={},
+            )
+        )
+    return endpoints
+
+
+def _load_model_gateway_settings() -> ModelGatewaySettings:
+    default_model = _getenv("MODEL_GATEWAY_DEFAULT_MODEL", _getenv("TRADING_LLM_MODEL", "gpt-4.1-mini"))
+    endpoints = _load_model_endpoints(default_model)
+    return ModelGatewaySettings(
+        enabled=_env_bool("MODEL_GATEWAY_ENABLED", True),
+        default_model=default_model,
+        audit_enabled=_env_bool("MODEL_GATEWAY_AUDIT_ENABLED", True),
+        endpoints=endpoints,
+    )
+
+
 @dataclass
 class AppSettings:
     """应用全局配置集合。"""
@@ -222,6 +294,7 @@ class AppSettings:
     monitoring: MonitoringSettings = field(default_factory=MonitoringSettings)
     database: DatabaseSettings = field(default_factory=DatabaseSettings)
     redis: RedisSettings = field(default_factory=RedisSettings)
+    model_gateway: ModelGatewaySettings = field(default_factory=_load_model_gateway_settings)
 
 
 @lru_cache(maxsize=1)
@@ -242,5 +315,7 @@ __all__ = [
     "TradingSettings",
     "DatabaseSettings",
     "RedisSettings",
+    "ModelGatewaySettings",
+    "ModelEndpointSettings",
     "get_settings",
 ]

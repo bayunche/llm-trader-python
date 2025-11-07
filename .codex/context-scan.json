@@ -1,123 +1,172 @@
 {
-  "scan_timestamp": "2025-11-05T13:48:28+08:00",
+  "scan_timestamp": "2025-11-06T09:34:49+08:00",
   "areas": [
     {
-      "name": "现有端到端管线与模块划分",
+      "name": "模型网关与决策服务",
       "locations": [
-        "src/llm_trader/pipeline/auto.py",
-        "src/llm_trader/trading",
-        "scripts/run_full_pipeline.py"
+        "src/llm_trader/strategy/llm_generator.py",
+        "src/llm_trader/trading/orchestrator.py",
+        "src/llm_trader/trading/manager.py",
+        "src/llm_trader/api/routes/trading.py"
       ],
-      "current_state": "当前项目沿用旧版 LLM Trader 框架，数据采集、策略、风控、交易执行分散在多个子包内；run_full_pipeline 对应整套流程但与项目需求中的 Actor/Checker/Risk Gate 分层不完全一致，缺少面向决策链路的显式边界。",
+      "current_state": "策略生成仍直接调用 OpenAI 客户端，未提供多端点模型网关或调用审计；Actor/Checker 逻辑耦合在 orchestrator/manager 内，缺少与文档定义的 JSON Schema 对齐，也未拆分独立服务或 API。",
       "similar_cases": [
-        "tests/pipeline/test_auto.py",
-        "tests/tasks/test_managed_cycle.py",
-        "docs/architecture.md"
+        "tests/trading/test_orchestrator.py",
+        "tests/trading/test_manager.py",
+        "tests/strategy/test_prompts.py"
       ],
       "tech_stack": [
-        "Python 3.10",
-        "APScheduler",
-        "PyArrow",
+        "OpenAI SDK",
+        "FastAPI",
+        "pydantic",
         "pandas"
       ],
       "tests": [
-        "tests/pipeline/test_auto.py",
-        "tests/tasks/test_managed_cycle.py"
+        "tests/trading/test_orchestrator.py",
+        "tests/trading/test_manager.py",
+        "tests/strategy/test_prompts.py"
       ],
-      "notes": "全面重构需按照《项目需求.md》重建 Actor-Checker-Risk Gate-Execution 链条，现有 orchestrator 逻辑只能作为参考，不能直接复用。"
+      "notes": "需实现符合 MG/ACT/CHK 要求的服务层与审计落库，重构现有 orchestrator 中的模型调用路径，并补充端到端测试。"
     },
     {
-      "name": "数据与存储层",
+      "name": "Parquet 数据仓储",
       "locations": [
-        "src/llm_trader/data",
-        "data_store",
-        "docs/data_store.md"
+        "src/llm_trader/data/repositories/parquet.py",
+        "tests/data/test_trading_repository.py",
+        "tests/data/regression/test_data_quality.py"
       ],
-      "current_state": "数据落地依赖本地 Parquet/DuckDB，账户、风险、行情等快照存储分散，多数仓储封装在 ParquetRepository；新需求要求决策总账、观测、订单、成交等全部进入 PostgreSQL 并支持在线热更新。",
+      "current_state": "仓储已覆盖 symbols、calendar、ohlcv 通用写入等方法，但缺少测试期望的 write_ohlcv_daily/ write_ohlcv_intraday/ write_quotes 等便捷接口；数据质量回归测试无法直接调用通用写入，导致回归阻塞。",
       "similar_cases": [
-        "tests/data",
-        "tests/reports",
-        "docs/schema.md"
+        "tests/data/test_ohlcv_pipeline.py",
+        "docs/data_store.md",
+        "docs/realtime_data.md"
       ],
       "tech_stack": [
-        "DuckDB",
-        "PyArrow",
-        "pandas"
+        "pyarrow",
+        "pandas",
+        "pytest"
       ],
       "tests": [
         "tests/data/test_trading_repository.py",
-        "tests/reports/test_report_builder.py"
+        "tests/data/regression/test_data_quality.py"
       ],
-      "notes": "需要重新设计基于 PostgreSQL 的数据模型与存储访问层，替换现有本地文件仓储，并满足决策审计与配置中心一致的数据一致性要求。"
+      "notes": "需按照测试预期提供带符号/频率参数的写入封装，并确保列名、分区结构符合 DatasetConfig 定义，同时修复测试文件的缺失依赖。"
     },
     {
-      "name": "API 与仪表盘",
+      "name": "数据库模型字段类型",
       "locations": [
-        "src/llm_trader/api",
-        "dashboard",
+        "src/llm_trader/db/models/core.py",
+        "src/llm_trader/db/models/audit.py",
+        "src/llm_trader/db/models/market.py",
+        "src/llm_trader/db/models/reference.py"
+      ],
+      "current_state": "近期为规避 SQLModel 导入失败进行过类型调整，但 Integer/Float 对应 SQLAlchemy Column 未完全对齐，pytest 收集阶段仍报类型/方言冲突。",
+      "similar_cases": [
+        "tests/model_gateway/test_service.py",
+        "tests/decision/test_actor_service.py"
+      ],
+      "tech_stack": [
+        "SQLModel",
+        "SQLAlchemy",
+        "Pydantic"
+      ],
+      "tests": [
+        "env PYTHONPATH=src python -m pytest"
+      ],
+      "notes": "需梳理所有字段，统一使用 Column(Integer/Float, nullable=...)，确保 Alembic/SQLModel 元数据一致并恢复 pytest。"
+    },
+    {
+      "name": "数据采集与观测链路",
+      "locations": [
+        "src/llm_trader/data/ingestion/service.py",
+        "src/llm_trader/observation/service.py",
+        "src/llm_trader/tasks/managed_cycle.py"
+      ],
+      "current_state": "已实现 DataIngestionService 写入 PostgreSQL、ObservationBuilder 聚合并缓存观测、managed_cycle 调用 run_managed_trading_cycle；run_cycle 会在每次调度前刷新主表与行情并写回观测日志，目前缺少针对 DataIngestionService 的单元测试与配置驱动的符号选择。",
+      "similar_cases": [
+        "tests/observation/test_observation_builder.py",
+        "tests/tasks/test_managed_cycle.py",
+        "tests/data/test_realtime_quotes.py"
+      ],
+      "tech_stack": [
+        "SQLModel",
+        "Redis",
+        "APScheduler",
+        "Pendulum"
+      ],
+      "tests": [
+        "tests/observation/test_observation_builder.py",
+        "tests/tasks/test_managed_cycle.py",
+        "tests/data/test_realtime_quotes.py"
+      ],
+      "notes": "需补齐 DataIngestionService 级别的覆盖与账号快照写入验证，并依据《详细方案.md》补充观测中 market_rules 与 risk_snapshot 细节及缓存指标对外导出接口。"
+    },
+    {
+      "name": "调度与统一入口",
+      "locations": [
+        "config/scheduler.prod.json",
+        "src/llm_trader/scheduler/manager.py",
+        "scripts/run_scheduler.py",
         "app.py"
       ],
-      "current_state": "现有 FastAPI + Streamlit 提供基础数据访问和可视化，但缺少模型网关、审计总账、配置中心等新需求模块，也没有统一的观察与决策链路视图。",
+      "current_state": "scheduler.manager 已支持从 JSON/字典启动 APScheduler，config/scheduler.prod.json 提供示例配置，app.py 会在启动时加载该文件并并行运行 Streamlit 仪表盘；重构计划仍要求自动导出调度配置并与 TradingSettings 联动。",
       "similar_cases": [
-        "tests/api",
-        "tests/dashboard",
-        "docs/dashboard.md"
+        "docs/scheduler.md",
+        "scripts/run_managed_scheduler.py",
+        "scripts/run_realtime_scheduler.py"
       ],
       "tech_stack": [
-        "FastAPI",
-        "Uvicorn",
-        "Streamlit"
+        "APScheduler",
+        "JSON",
+        "Subprocess"
       ],
-      "tests": [
-        "tests/api/test_trading.py",
-        "tests/dashboard/test_data_access.py"
-      ],
-      "notes": "需重塑 API 分层与仪表盘结构，使其覆盖模型网关、配置中心、审计决策链路，并对接新的 PostgreSQL 数据层。"
+      "tests": [],
+      "notes": "需根据 TradingSettings 生成 scheduler JSON（含行情与 managed cycle 的默认任务），并提供命令行或脚本导出能力以满足“待导出调度配置”备注。"
     },
     {
-      "name": "部署与统一启动",
+      "name": "需求对齐资料",
       "locations": [
-        "Dockerfile",
-        "docker-compose.prod.yml",
-        "start.sh",
-        "docker/entrypoint.sh"
+        "详细方案.md",
+        "项目需求.md",
+        "docs/重构计划.md"
       ],
-      "current_state": "已有单容器 Docker 与 start.sh 脚本，依赖文件卷挂载；未集成 PostgreSQL，也未区分多服务组件，统一入口与健康检查逻辑需按新需求 ADM-A/DEP-A 重新设计。",
+      "current_state": "三份文档给出了 Actor→Checker→Risk→执行链路、数据模型字段、调度节奏与更新记录；当前代码仅完成 PostgreSQL 数据层和观测生成核心任务 2 的主体逻辑。",
       "similar_cases": [
-        "docker-compose.dev.yml",
+        "docs/realtime_data.md",
         "docs/scheduler.md",
-        "scripts/run_full_pipeline.py"
+        "docs/monitoring.md"
       ],
       "tech_stack": [
-        "Docker Compose",
-        "Poetry",
-        "Bash"
+        "Markdown"
       ],
-      "tests": [
-        "tests/test_bootstrap.py"
-      ],
-      "notes": "新需求要求 PostgreSQL、模型网关、观测管线、仪表盘等统一容器化部署，并提供统一启动入口与健康探针，需要重新规划 compose 与启动脚本。"
+      "tests": [],
+      "notes": "需持续对照文档中的字段与性能指标（如 OBS-01 单次构建≤50ms、缓存 TTL 要求）校准实现细节，并在每次交付后更新 docs/重构计划.md 的任务状态与备注。"
     }
   ],
   "observation_report": {
     "anomalies": [
-      "现有实现依赖本地 Parquet/DuckDB，与新需求指定的 PostgreSQL 数据库不符。",
-      "Actor/Checker/Risk Gate 等关键角色在当前代码中缺乏清晰的模块化边界。",
-      "部署脚本未包含数据库或多服务组件，无法满足统一启动与健康检查的新要求。"
+      "数据采集服务尚无直接测试覆盖，account snapshot 写入在当前任务链中缺少触发示例。",
+      "调度配置文件为静态示例，未能根据 TradingSettings 导出或随着配置变化自动更新，与重构计划备注相符。",
+      "观测缓存命中指标仅在日志中暴露，尚无公共 API 或状态文件供调度层引用。",
+      "模型调用路径缺少网关与调用审计，与文档要求的多端点路由和日志字段不符。",
+      "SQLModel 数值字段的 SQLAlchemy Column 定义不统一，引发 pytest 导入/类型错误。"
     ],
     "information_gaps": [
-      "需对《项目需求.md》中的字段级设计逐段提炼，建立与代码实现的一一映射。",
-      "需要明确 PostgreSQL 的目标 schema、索引与迁移策略。",
-      "需要确定统一启动入口需要管理的服务范围（API、调度、数据同步、仪表盘等）。"
+      "需要明确导出的调度配置应包含哪些必选任务与参数（如 symbols、interval、policy thresholds）。",
+      "需要确认观测构建缓存指标是否需写入 reports/status.json 或 Redis 供仪表盘读取。",
+      "需要确定 DataIngestionService 是否需要从外部注入账号数据还是在调度中增加采集步骤。",
+      "需要梳理模型网关配置结构（端点、权重、熔断、成本统计）及 Actor/Checker JSON Schema 的落库字段。",
+      "需要确认各 SQLModel 表的整数/浮点字段是否需与 Alembic 迁移保持一致仍存在遗漏。"
     ],
     "suggested_deep_dives": [
-      "进一步拆解《项目需求.md》中 Observation、Decision、Decision Ledger 等字段要求，形成数据模型草图。",
-      "评估现有 orchestrator 与任务调度实现，界定可复用的逻辑与需要重写的部分。",
-      "梳理 Docker 与启动脚本，规划引入 PostgreSQL、队列、仪表盘等多容器架构方案。"
+      "梳理 TradingSettings 与 RiskSettings 字段，设计导出调度配置的映射规则。",
+      "检查 docs/realtime_data.md 与 docs/scheduler.md 的验收标准，细化 run_cycle/实时任务需要补充的日志与状态输出。",
+      "回顾 tests/tasks/test_managed_cycle.py 现有断言，规划新增针对调度配置与数据采集流程的测试。",
+      "研读 项目需求.md 第5.2-5.5节，定义 Actor/Checker/Risk Gate 数据结构与 API 契约。"
     ],
     "tool_notes": {
-      "code_index": "仓库未配置 code-index，继续使用 rg 与 shell 探查文件。",
-      "sequential_thinking": "本任务已记录三次 sequential-thinking 思考，用于确认需求与下一步动作。"
+      "code_index": "仓库未配置 code-index，已改用 rg/ls 进行检索并在日志中记录。",
+      "sequential_thinking": "sequential-thinking 命令缺失，转而在 .codex/sequential-thinking-20251106-3.json 中记录手动推理。"
     }
   }
 }

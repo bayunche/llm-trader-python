@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import pandas as pd
 
@@ -34,7 +34,18 @@ from llm_trader.trading.session import TradingSession, TradingSessionConfig
 from llm_trader.data.pipelines.realtime_quotes import RealtimeQuotesPipeline
 from llm_trader.data.pipelines.symbols import SymbolsPipeline
 from llm_trader.data.repositories.parquet import ParquetRepository
-from llm_trader.common import DataSourceError
+from llm_trader.common import DataSourceError, get_logger
+from llm_trader.decision import (
+    ActorContext,
+    ActorService,
+    CheckerContext,
+    CheckerService,
+    DecisionRecord,
+    DecisionService,
+)
+from llm_trader.decision.schema import ActorDecisionPayload, CheckerResultPayload
+
+LOGGER = get_logger("trading.orchestrator")
 
 
 @dataclass
@@ -68,6 +79,10 @@ def run_ai_trading_cycle(
     log_repository: Optional[LLMStrategyLogRepository] = None,
     quotes: Optional[Sequence[Dict[str, object]]] = None,
     observation_id: Optional[str] = None,
+    observation: Optional[object] = None,
+    actor_service: Optional[ActorService] = None,
+    checker_service: Optional[CheckerService] = None,
+    decision_service: Optional[DecisionService] = None,
     load_ohlcv_fn=load_ohlcv,
 ) -> Dict[str, object]:
     """执行一次完整的 AI 交易循环并返回执行详情。"""
@@ -150,6 +165,77 @@ def run_ai_trading_cycle(
             },
         )
 
+    observation_dict = _normalize_observation(observation)
+    actor_decision: Optional[ActorDecisionPayload] = None
+    checker_payload: Optional[CheckerResultPayload] = None
+    decision_record: Optional[DecisionRecord] = None
+    actor_input = observation if observation is not None else observation_dict
+    if actor_service and actor_input is not None:
+        try:
+            actor_decision = actor_service.generate_decision(
+                actor_input,
+                context=ActorContext(
+                    session_id=config.session_id,
+                    strategy_id=config.strategy_id,
+                    objective=config.objective,
+                    model=config.llm_model,
+                ),
+            )
+        except Exception as exc:  # pragma: no cover - 网络/配置失败时回退
+            LOGGER.warning(
+                "Actor 调用失败，将回退至策略生成器",
+                extra={"error": str(exc)},
+            )
+            actor_decision = None
+        else:
+            if checker_service is not None:
+                try:
+                    checker_payload = checker_service.review(
+                        actor_input,
+                        actor_decision,
+                        context=CheckerContext(
+                            session_id=config.session_id,
+                            strategy_id=config.strategy_id,
+                            model=config.llm_model,
+                        ),
+                    )
+                except Exception as exc:  # pragma: no cover
+                    LOGGER.warning(
+                        "Checker 审单失败，将忽略审单结果",
+                        extra={"error": str(exc)},
+                    )
+                    checker_payload = None
+            if decision_service is not None:
+                obs_ref = (
+                    actor_decision.observations_ref
+                    or (observation_dict or {}).get("observation_id")
+                    or observation_id
+                )
+                if obs_ref:
+                    try:
+                        decision_record = decision_service.record(
+                            observation_id=str(obs_ref),
+                            actor_result=actor_decision,
+                            checker_result=checker_payload,
+                        )
+                    except Exception as exc:  # pragma: no cover - 入库失败不阻断流程
+                        LOGGER.warning(
+                            "记录决策结果失败",
+                            extra={
+                                "decision_id": actor_decision.decision_id,
+                                "error": str(exc),
+                            },
+                        )
+                else:
+                    LOGGER.warning(
+                        "决策缺少 observation_id，跳过入库",
+                        extra={"decision_id": actor_decision.decision_id},
+                    )
+            if actor_decision.observations_ref:
+                observation_id = actor_decision.observations_ref
+            elif observation_dict and observation_dict.get("observation_id"):
+                observation_id = str(observation_dict["observation_id"])
+
     quotes = [quotes_map[symbol] for symbol in pipeline_symbols if symbol in quotes_map]
     if len(quotes) < len(pipeline_symbols):
         missing = [symbol for symbol in pipeline_symbols if symbol not in quotes_map]
@@ -170,6 +256,8 @@ def run_ai_trading_cycle(
         ),
         adapter=adapter,
     )
+    if config.execution_mode == "live":
+        raise NotImplementedError("实盘执行暂未在 run_ai_trading_cycle 中启用")
 
     bars = load_ohlcv_fn(pipeline_symbols, config.freq, config.history_start, config.history_end)
     if not bars:
@@ -208,6 +296,9 @@ def run_ai_trading_cycle(
         "llm_prompt": last_prompt,
         "llm_response": last_raw,
         "observation_id": observation_id,
+        "decision": actor_decision,
+        "checker_result": checker_payload,
+        "decision_record": decision_record,
         "quotes": quotes,
         "orders_executed": sum(len(v) for v in orders_by_dt.values()),
         "trades_filled": len(executed_trades),
@@ -215,6 +306,17 @@ def run_ai_trading_cycle(
         "selected_symbols": pipeline_symbols,
         "config": derived_config,
     }
+
+
+def _normalize_observation(observation: object | None) -> Optional[Dict[str, Any]]:
+    if observation is None:
+        return None
+    if isinstance(observation, dict):
+        return observation
+    to_dict = getattr(observation, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    return None
 
 
 def _summarize_quotes(quotes: Iterable[Dict[str, object]]) -> str:

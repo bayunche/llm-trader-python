@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -25,6 +25,48 @@ class ParquetRepository:
     """负责将数据写入 Parquet 并处理增量逻辑。"""
 
     manager: DataStoreManager = field(default_factory=default_manager)
+
+    def write_ohlcv_daily(
+        self,
+        symbol: str,
+        freq: str,
+        records: Sequence[Record],
+    ) -> None:
+        """写入日线行情的便捷方法。"""
+
+        if not records:
+            return
+        freq_label = freq.upper()
+        if freq_label != "D":
+            raise ValueError("日线写入仅支持频率 D")
+        normalized = self._normalise_ohlcv_records(
+            symbol=symbol,
+            freq=freq_label,
+            records=records,
+            date_only=True,
+        )
+        self.write_ohlcv(normalized, freq=freq_label)
+
+    def write_ohlcv_intraday(
+        self,
+        symbol: str,
+        freq: str,
+        records: Sequence[Record],
+    ) -> None:
+        """写入分钟线行情的便捷方法。"""
+
+        if not records:
+            return
+        freq_label = freq.lower()
+        if not freq_label:
+            raise ValueError("分钟线写入需要频率标识")
+        normalized = self._normalise_ohlcv_records(
+            symbol=symbol,
+            freq=freq_label,
+            records=records,
+            date_only=False,
+        )
+        self.write_ohlcv(normalized, freq=freq_label)
 
     def write_symbols(self, records: Sequence[Record]) -> Path:
         if not records:
@@ -403,6 +445,61 @@ class ParquetRepository:
             dt_value: datetime = record["dt"]
             grouped[dt_value.date()].append(record)
         return grouped
+
+    @staticmethod
+    def _parse_timestamp(value: Any, *, date_only: bool) -> datetime:
+        """解析原始时间字段，确保返回 datetime。"""
+
+        if isinstance(value, datetime):
+            dt_value = value
+        elif isinstance(value, date):
+            dt_value = datetime.combine(value, datetime.min.time())
+        elif value is None:
+            raise ValueError("缺少时间字段")
+        else:
+            text = str(value).strip()
+            if not text:
+                raise ValueError("时间字段为空字符串")
+            if text.endswith("Z"):
+                text = f"{text[:-1]}+00:00"
+            try:
+                dt_value = datetime.fromisoformat(text)
+            except ValueError as exc:
+                raise ValueError(f"无法解析时间字段：{value}") from exc
+        if date_only:
+            return datetime.combine(dt_value.date(), datetime.min.time())
+        return dt_value
+
+    def _normalise_ohlcv_records(
+        self,
+        *,
+        symbol: str,
+        freq: str,
+        records: Sequence[Record],
+        date_only: bool,
+    ) -> List[Record]:
+        """统一补全 symbol/freq，并解析时间字段。"""
+
+        normalized: List[Record] = []
+        for record in records:
+            data = dict(record)
+            dt_value = data.get("dt")
+            if dt_value is None:
+                candidate_keys = ("date", "timestamp", "time")
+                for key in candidate_keys:
+                    if key in data:
+                        dt_value = data[key]
+                        break
+            if dt_value is None:
+                raise ValueError("行情记录缺少时间字段")
+            parsed_dt = self._parse_timestamp(dt_value, date_only=date_only)
+            data["dt"] = parsed_dt
+            data["symbol"] = data.get("symbol", symbol)
+            data["freq"] = freq
+            if date_only:
+                data["date"] = parsed_dt.date()
+            normalized.append(data)
+        return normalized
 
 
 __all__ = ["ParquetRepository"]

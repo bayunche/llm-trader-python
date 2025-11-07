@@ -1,0 +1,29 @@
+{
+    "question": "Actor/Checker 服务的接口与数据结构需要如何设计？",
+    "priority": "high",
+    "reason_to_investigate": "任务 3 要求落地 ACT-01 和 CHK-01，需要厘清动作 JSON Schema、校验规则以及 Checker 输出结构，确保代码实现与文档一致。",
+    "findings": [
+        {
+            "file": "项目需求.md",
+            "lines": "120-220",
+            "summary": "详细列出 Actor 决策 JSON 字段（decision_id、actions[].type/price/qty/tif 等）及校验规则，要求限价落在 price_band 内、qty 为 lot_size 整数倍、不得相互冲突。"
+        },
+        {
+            "file": "项目需求.md",
+            "lines": "220-280",
+            "summary": "Checker 输出需提供 pass、reasons、observation_expired、conflicts 等字段，并规定超时视为不通过，覆盖结构/取值域/时效/一致性。"
+        },
+        {
+            "file": "详细方案.md",
+            "lines": "270-320",
+            "summary": "提示词章节给出 Actor/Checker 系统提示模板，要求 Actor 仅输出 JSON、包含 global_intent 与 action.intent.rationale/confidence；Checker 只做结构与一致性检查，输出 {\"pass\": bool, \"reasons\": []}。"
+        },
+        {
+            "file": "项目需求.md",
+            "lines": "43-60",
+            "summary": "功能清单对 ACT-01/CHK-01 的性能指标（非法结构率 <0.5%、延迟上限、误放行≈0）和质量要求做了说明，需要在实现中支持统计与审计。"
+        }
+    ],
+    "conclusion": "Actor 服务需接收 Observation 并输出严格遵循 JSON Schema 的决策对象，包含 global_intent 与动作列表；Checker 服务基于 Observation+Decision 返回 pass/reasons 等结构化结果。两者应提供 Pydantic 校验、记录模型及延迟指标，并与审计表关联。",
+    "next_steps": "定义 Pydantic 模型/Schema 并实现校验逻辑，设计服务接口（可能通过模型网关调用）与审计记录落库流程，规划单元测试覆盖合法/非法场景。"
+}

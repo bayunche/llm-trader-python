@@ -1,15 +1,17 @@
 {
   "known": [
-    "run_full_automation 已在交易执行后写入 trading_runs parquet，记录 prompt/response 等字段。",
-    "调度器任务 run_cycle 仍停留在日志输出，未复用上述写入逻辑，因此触发的自动交易无法在仪表盘历史页呈现。",
-    "仪表盘主页面只有三个标签，新标签缺位导致用户无法快速定位自动交易大模型调用详情。",
-    "dashboard.data 已提供 get_history/get_recent_llm_logs 等函数，可复用以构建独立视图。"
+    "调度配置已可根据 TradingSettings 自动导出，并包含行情、账户快照与 managed cycle 任务。",
+    "账户快照通过 AccountSnapshotPipeline 与 DataIngestionService.sync_account_snapshot 写入 PostgreSQL。",
+    "模型调用目前仍由 LLMStrategyGenerator 直接访问 OpenAI，无集中路由或审计逻辑。",
+    "项目需求对 Actor/Checker 输出的 JSON Schema 与审计字段有明确要求。",
+    "模型网关服务与配置 API 草案已经提交，包含熔断统计与 metrics 快照接口。"
   ],
   "unknown": [
-    "高优先级：在调度路径中调用哪段代码最合适以复用 trading_runs 写入逻辑，避免重复实现？",
-    "高优先级：新增的自动交易调用日志 tab 需要展示哪些字段（如 prompt、response、风控结论、选股列表），是否需额外聚合？",
-    "中优先级：缓存命中后新写入的 trading_runs 是否会被仪表盘立即读取，是否需要在界面层触发 invalidate_cache？",
-    "低优先级：是否需要为新标签添加导出功能或按策略/会话过滤的默认选项？"
+    "高优先级：哪些 SQLModel 字段仍使用不兼容的 Integer/Float 定义，导致 pytest 报错？修复后是否需同步 Alembic 迁移或测试夹具？",
+    "高优先级：Actor/Checker 服务需要怎样的服务层边界与审计落库流程，才能与模型网关新 API 集成？",
+    "中优先级：模型网关熔断与指标需要暴露给哪些调用者（API、Prometheus、文档示例），具体格式如何？",
+    "中优先级：决策链路中的调用审计应如何串联到 DecisionLedger 以及数据库中的 LLMCallAudit？",
+    "高优先级：ParquetRepository 的日线/分钟线写入接口需要怎样的列与分区约束，才能满足数据仓储测试读取？"
   ],
-  "notes": "接下来重点验证 run_ai_trading_cycle 返回结构是否始终包含 config 与 LLM 字段，并在设计仪表盘新 tab 时考虑缓存刷新提示。"
+  "notes": "接下来需集中分析《项目需求.md》第5.2-5.7节及 db/models 下的字段定义，摸清待修复的类型问题；并梳理模型网关 API、Actor/Checker 服务与审计落库的集成点。"
 }

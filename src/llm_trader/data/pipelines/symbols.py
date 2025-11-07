@@ -154,10 +154,26 @@ class SymbolsPipeline:
 
     def _fetch_from_exchanges(self) -> List[Dict[str, object]]:
         records: List[Dict[str, object]] = []
-        records.extend(self._fetch_sse())
-        records.extend(self._fetch_szse())
+        last_error: Optional[Exception] = None
+
+        try:
+            records.extend(self._fetch_sse())
+        except Exception as exc:  # pragma: no cover - 网络异常按降级策略处理
+            last_error = exc
+            _LOGGER.warning("上交所接口访问失败，继续尝试深交所", extra={"error": str(exc)})
+
+        try:
+            records.extend(self._fetch_szse())
+        except Exception as exc:  # pragma: no cover - 网络异常按降级策略处理
+            last_error = exc
+            _LOGGER.warning("深交所接口访问失败", extra={"error": str(exc)})
+
         if not records:
-            raise DataSourceError("上交所/深交所接口未返回证券数据")
+            message = "上交所/深交所接口未返回证券数据"
+            if last_error:
+                raise DataSourceError(message) from last_error
+            raise DataSourceError(message)
+
         ensure_columns(records, ["symbol", "name"])
         cleaned = drop_duplicates(records, subset=["symbol"])
         cleaned = sort_records(cleaned, "symbol")

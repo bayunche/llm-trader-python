@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from llm_trader.scheduler import load_scheduler_config, start_scheduler_from_config
+from llm_trader.scheduler import export_scheduler_config, load_scheduler_config, start_scheduler_from_config
 
 
 LOG_LEVEL = os.getenv("APP_LOG_LEVEL", "INFO").upper()
@@ -54,8 +54,8 @@ def _start_scheduler(config_path: Path) -> Optional[object]:
     """启动调度器并返回实例，若配置缺失则返回 None。"""
 
     if not config_path.exists():
-        LOGGER.warning("Scheduler config %s not found，调度器将不会启动", config_path)
-        return None
+        LOGGER.info("Scheduler config %s not found，auto generating…", config_path)
+        export_scheduler_config(config_path)
     scheduler_config = load_scheduler_config(config_path)
     scheduler = start_scheduler_from_config(scheduler_config)
     LOGGER.info("Scheduler started with config %s", config_path)

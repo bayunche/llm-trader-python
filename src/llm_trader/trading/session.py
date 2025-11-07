@@ -55,7 +55,10 @@ class TradingSession:
         price_lookup: PriceLookup,
     ) -> List[Trade]:
         """执行订单并记录订单、成交及账户权益。"""
+        from .execution_adapters import LiveBrokerExecutionAdapter  # 延迟导入防循环
 
+        if isinstance(self.adapter, LiveBrokerExecutionAdapter):
+            raise NotImplementedError("当前环境未启用实盘执行，请使用 sandbox 模式")
         return self.adapter.execute(self, dt, orders, price_lookup)
 
     def _execute_sandbox(

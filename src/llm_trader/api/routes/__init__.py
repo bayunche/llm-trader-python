@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from llm_trader.api.security import require_api_key
 
 from .backtest import router as backtest_router
+from .config_models import router as config_models_router
 from .data import router as data_router
 from .strategy import router as strategy_router
 from .trading import router as trading_router
@@ -18,6 +19,7 @@ router.include_router(data_router, dependencies=[Depends(require_api_key)])
 router.include_router(backtest_router, dependencies=[Depends(require_api_key)])
 router.include_router(strategy_router, dependencies=[Depends(require_api_key)])
 router.include_router(trading_router)
+router.include_router(config_models_router, dependencies=[Depends(require_api_key)])
 
 
 @router.get("/health", summary="服务健康检查")

@@ -3,22 +3,64 @@
   "reason": "shrimp-task-manager 工具缺失，人工拆解任务。",
   "tasks": [
     {
+      "id": "T0",
+      "title": "修复 SQLModel Integer/Float 类型",
+      "milestone": "M0 SQLModel 修复",
+      "deliverables": [
+        "定位 pytest 报错的字段与表",
+        "更新 SQLModel 定义并同步迁移说明",
+        "记录测试结果与风险评估"
+      ]
+    },
+    {
       "id": "T1",
-      "title": "整理开发计划与历史记录",
-      "milestone": "P1 收集阶段证据",
-      "deliverables": ["阶段状态摘录", "关键文档引用清单"]
+      "title": "整理模型网关与 Actor/Checker 设计",
+      "milestone": "M1 设计对齐",
+      "deliverables": [
+        "模型网关配置字段与接口说明",
+        "Actor/Checker JSON Schema 草案",
+        "依赖清单与测试策略（含 SQLModel 回归）"
+      ]
     },
     {
       "id": "T2",
-      "title": "对照代码与测试验证阶段成果",
-      "milestone": "P2 完成度评估",
-      "deliverables": ["Phase A/B/C 对应代码证据", "未完成事项列表"]
+      "title": "实现模型网关服务",
+      "milestone": "M2 模型网关实现",
+      "deliverables": [
+        "完善 OpenAI 兼容网关（熔断、指标、配置刷新）",
+        "端点配置与熔断逻辑单元测试",
+        "文档中新增网关使用指引"
+      ]
     },
     {
       "id": "T3",
-      "title": "生成阶段结论与建议",
-      "milestone": "P3 输出项目阶段结论",
-      "deliverables": ["阶段判断摘要", "风险与后续建议", "待确认事项列表"]
+      "title": "搭建 Actor/Checker 服务层",
+      "milestone": "M3 Actor/Checker 服务",
+      "deliverables": [
+        "Pydantic Schema 与校验逻辑",
+        "Actor/Checker 服务与模型网关集成并串联审计",
+        "覆盖 datetime 序列化等场景的单元测试"
+      ]
+    },
+    {
+      "id": "T4",
+      "title": "集成 orchestrator 与测试修复",
+      "milestone": "M4 集成与验证",
+      "deliverables": [
+        "orchestrator/manager 接入新服务",
+        "pytest 回归（记录运行结果与待办）",
+        "文档与验证记录更新"
+      ]
+    },
+    {
+      "id": "T5",
+      "title": "补齐 Parquet 数据仓储与数据测试",
+      "milestone": "M5 数据仓储补全",
+      "deliverables": [
+        "实现 ParquetRepository 缺失的写入接口",
+        "修复数据模块测试依赖（如缺失 import）",
+        "记录并执行数据层 pytest 结果与风险评估"
+      ]
     }
   ]
 }
