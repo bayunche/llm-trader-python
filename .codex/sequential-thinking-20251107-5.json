@@ -1,0 +1,23 @@
+{
+    "timestamp": "2025-11-07T12:14:30+08:00",
+    "context": [
+        "tests/api/test_config_models.py 在 11-07 上午的分组运行中连续三次 600s 超时，阻塞任务 3",
+        "排查表明 config_models 模块导入即创建 ModelGateway，create_session_factory 会尝试连接 PostgreSQL",
+        "当前环境无数据库服务，导致 import 阶段就挂起；tests 虽注入 stub，但来不及执行"
+    ],
+    "reasoning": [
+        "需要让 config_models 仅在实际调用时才实例化 ModelGateway，并允许 monkeypatch 后绕过真实实例",
+        "lazy 模式必须同时服务两处调用：_refresh_gateway_from_db 与 /metrics 路由",
+        "修复后必须立即运行对应 pytest 并更新 docs/重构计划.md、verification.md，以证明 Task 3 取得进展"
+    ],
+    "plan": [
+        "实现 `_get_gateway()`，当 gateway 为 None 时创建 ModelGateway，否则复用现有/注入的实例",
+        "更新 _refresh_gateway_from_db 与 model_gateway_metrics 调用 `_get_gateway()`，并保留 `gateway` 变量供测试注入",
+        "执行 tests/api/test_config_models.py，记录命令输出；若成功则更新 .codex/testing.md、verification.md、docs/重构计划.md，并在 README/其他文档中注明配置 API 无需数据库即可运行"
+    ],
+    "risks": [
+        "若 lazy getter 未考虑多线程请求，可能在高并发下重复创建实例",
+        "pytest 运行仍可能因为其他 import（如 create_session_factory）读取 DATABASE_URL 而失败，需要准备降级策略",
+        "文档若未及时说明惰性加载机制，后续贡献者可能再次引入 eager 初始化"
+    ]
+}

@@ -1,37 +1,37 @@
 {
   "status": "manual_substitute",
   "reason": "shrimp-task-manager 工具缺失，人工执行计划分析。",
-  "summary": "围绕重构计划任务 3，当前迭代需完成 SQLModel 类型修复、Actor/Checker 服务串联、模型网关熔断/配置接口完善，以及补全 Parquet 数据仓储写入并恢复 pytest。",
+  "summary": "继续围绕重构计划任务 3，已完成配置刷新与调度联动，本轮聚焦向外提供模型调用审计 API，便于监控查询 Actor/Checker 调用日志。",
   "milestones": [
     {
-      "name": "M0 SQLModel 修复",
-      "goal": "统一 Integer/Float 字段映射，确保 SQLModel 元数据与 Alembic 一致，并让 pytest 正常收集。",
-      "dependencies": []
+      "name": "M6 Gateway Lazy Init",
+      "goal": "将配置 API 的 ModelGateway 初始化改为按需创建，保持测试可注入 stub 并避免无数据库环境挂起。",
+      "dependencies": ["M2 模型网关实现"]
     },
     {
-      "name": "M1 设计对齐",
-      "goal": "梳理模型网关、Actor/Checker 的接口与数据模型，输出设计草案与依赖清单。",
-      "dependencies": ["M0 SQLModel 修复"]
+      "name": "M7 Config API Verification",
+      "goal": "运行 tests/api/test_config_models.py 验证修复成效，并在 verification.md/.codex/testing.md 中留痕。",
+      "dependencies": ["M6 Gateway Lazy Init"]
     },
     {
-      "name": "M2 模型网关实现",
-      "goal": "完善 OpenAI 兼容网关，补齐熔断统计、指标暴露与配置中心接口，对接文档指引。",
-      "dependencies": ["M1 设计对齐"]
+      "name": "M9 LLM Audit API",
+      "goal": "新增模型网关调用审计查询接口（含 API/Schema/文档/测试），供外部监控获取 Actor/Checker 调用日志。",
+      "dependencies": ["M6 Gateway Lazy Init"]
     },
     {
-      "name": "M3 Actor/Checker 服务",
-      "goal": "构建 Actor/Checker 服务层与 Pydantic 校验，修复序列化问题并串联调用审计/数据库记录。",
-      "dependencies": ["M1 设计对齐", "M2 模型网关实现"]
+      "name": "M10 Risk Gate Closure Tests",
+      "goal": "扩展 Risk Gate/执行相关测试，验证 Actor/Checker→Risk→Execution 在模型端点变更后仍保持闭环。",
+      "dependencies": ["M9 LLM Audit API", "M3 Actor/Checker 服务"]
     },
     {
-      "name": "M4 集成与验证",
-      "goal": "将新服务接入 orchestrator/manager，补充测试与文档，并跑通 pytest 回归。",
-      "dependencies": ["M2 模型网关实现", "M3 Actor/Checker 服务"]
+      "name": "M11 Decision Ledger API",
+      "goal": "交付 `/api/trading/decisions` 及详情查询，返回 DecisionLedger/RiskResult 审计数据。",
+      "dependencies": ["M10 Risk Gate Closure Tests"]
     },
     {
-      "name": "M5 数据仓储补全",
-      "goal": "补齐 ParquetRepository 写入接口、修复测试依赖并执行数据层回归。",
-      "dependencies": ["M0 SQLModel 修复"]
+      "name": "M12 Decision Detail & Execution Tests",
+      "goal": "实现 `/api/trading/decisions/{id}` 详情及执行层闭环测试，补齐 Task 4/5 收尾。",
+      "dependencies": ["M11 Decision Ledger API"]
     }
   ]
 }

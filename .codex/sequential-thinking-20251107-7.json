@@ -1,0 +1,26 @@
+{
+    "timestamp": "2025-11-07T14:50:20+08:00",
+    "context": [
+        "Task 3 仍缺少外部可查询的模型调用审计接口，无法直接从 API 获取 Actor/Checker 调用日志",
+        "现有数据表 LLMCallAudit 已记录 provider/model/role/tokens/latency 等信息，并在 docs/monitoring.md 中规划了 REST 查询",
+        "需要新增 API 以及最小的过滤能力，让仪表盘或 Prometheus 采集端可查询最近 N 条记录"
+    ],
+    "analysis": [
+        "新增 `/api/monitor/llm-calls` GET 接口，参数支持 role/provider/decision_id 时间窗口 + limit，默认按 created_at DESC 排序",
+        "Pydantic schema 扩展 `LLMCallAuditItem/Response`，保持统一封装",
+        "在 `api/routes/__init__.py` 注册新 router，并加上 API Key 保护",
+        "补充单元测试：使用 stub session_scope 返回假记录，验证过滤参数被传递并返回结构正确",
+        "更新 docs/monitoring.md、verification.md、.codex/testing.md 等文档记录"
+    ],
+    "risks": [
+        "LLMCallAudit 记录可能很大，需要 limit 保护并考虑默认 50; 越界 query 可能导致返回全部 => enforce cap",
+        "SQLModel 查询需注意无 sqlalchemy 安装? 现有 tests 需 stub session_scope, avoid real DB",
+        "Datetime 序列化 UTC offset? use isoformat automatically by Pydantic"
+    ],
+    "next_steps": [
+        "扩展 `api/schemas.py`",
+        "创建 `api/routes/monitoring.py`（或在 trading 路由中新增 section），实现查询 logic",
+        "新增测试 `tests/api/test_monitoring.py` verify filtering and response code",
+        "文档更新 + testing/verification 记录 + docs/monitoring 记录"
+    ]
+}

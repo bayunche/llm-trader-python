@@ -1,0 +1,23 @@
+{
+    "timestamp": "2025-11-07T15:05:20+08:00",
+    "context": [
+        "Task 4 目标：扩展 Risk Gate、执行控制层的回归测试，验证 Actor/Checker → Risk → Execution 闭环在模型端点变动后依旧生效",
+        "当前已完成模型网关配置刷新，managed_cycle 会在 settings 变更时重建 ModelGateway/Actor/Checker，不过 RiskPolicy/RiskResult/DecisionLedger 缺少端到端测试",
+        "现有测试：tests/trading/test_manager.py、tests/trading/test_policy.py、tests/tasks/test_managed_cycle.py；执行控制层 tests/trading/test_session.py、test_orchestrator 等"
+    ],
+    "analysis": [
+        "需要构造场景：当 ModelGateway settings 更新（或 Actor/Checker 注入 stub），RiskPolicy 仍能评估并写入 DecisionService.record_risk_result/record_ledger",
+        "可在 tests/tasks/test_managed_cycle.py 或新增 tests/trading/test_managed_cycle_risk.py 中，mock DataIngestionService + ObservationBuilder + ModelGateway，使 run_managed_trading_cycle 走完整流程",
+        "风险重点：RiskPolicy evaluate + DecisionService record_risk_result + ledger entry + RiskDecision triggered"
+    ],
+    "next_steps": [
+        "梳理 Risk Gate 逻辑（RiskPolicy、DecisionService.record_risk_result、trading/manager.py）",
+        "选择测试入口（建议 run_managed_trading_cycle），通过 stub actor/checker/decision service & risk policy to assert ledger/risk_result recorded",
+        "若 run_managed_trading_cycle 过重，可写新的 integration test focusing on DecisionService interactions"
+    ],
+    "risks": [
+        "现有 tests/trading/test_manager.py 可能 already covering risk_result, need avoid duplication",
+        "Fake DataIngestion/Observation builder may require large mocking; consider building minimal observation in tests",
+        "Execution adapter (sandbox) may place actual orders -> heavy dependencies; prefer mocking trading_session execute"
+    ]
+}

@@ -3,67 +3,35 @@
   "reason": "shrimp-task-manager 工具缺失，人工完成技术可行性分析。",
   "domains": [
     {
-      "area": "SQLModel 类型修复",
-      "feasibility": "中高",
-      "assumptions": [
-        "现有 SQLModel 定义已集中在 db/models 下，可逐一核对 Integer/Float 对应的 Column 定义。",
-        "pytest 报错信息能明确指出受影响的表字段。"
-      ],
-      "risks": [
-        "字段类型调整可能与 Alembic 迁移不一致导致运行期异常。",
-        "部分字段可能需要 Decimal/NUMERIC 支持以保持精度。"
-      ],
-      "mitigations": [
-        "对照迁移脚本和现有测试夹具，必要时同步更新迁移或提供兼容转换。",
-        "为高精度字段引入 Decimal 或保留 Float 并在文档中解释，确保测试覆盖。"
-      ]
-    },
-    {
-      "area": "Actor/Checker 服务整合",
-      "feasibility": "中",
-      "assumptions": [
-        "ModelGateway 已支持调用审计，Actor/Checker 只需在服务层补充上下文和校验。",
-        "Pydantic Schema 能覆盖文档定义的 JSON 结构并提供 json 模式导出。"
-      ],
-      "risks": [
-        "datetime/Decimal 等类型在构建 Prompt 时可能影响 json.dumps。",
-        "与 Decision/CheckerResult ORM 的衔接需要事务管理，易出现会话冲突。"
-      ],
-      "mitigations": [
-        "使用 Pydantic 的 model_dump(mode=\"json\") 或自定义序列化器处理 datetime。",
-        "封装服务层接口，将数据库写入与模型调用分离，便于测试和错误恢复。"
-      ]
-    },
-    {
-      "area": "模型网关熔断与配置 API",
-      "feasibility": "中",
-      "assumptions": [
-        "现有 ModelGateway 已有熔断统计与 metrics 快照基础。",
-        "FastAPI 路由 `/api/config/models` 已建立，可扩展 PUT/GET/metrics 行为。"
-      ],
-      "risks": [
-        "metrics 需要序列化 datetime 等类型，可能产生 JSON 兼容性问题。",
-        "配置刷新依赖全局 gateway 实例，需避免并发访问造成旧配置残留。"
-      ],
-      "mitigations": [
-        "在 metrics 接口中统一转换时间字段，并为 gateway 添加线程安全更新策略。",
-        "编写 API 单元测试覆盖 upsert、list、metrics 流程，确保依赖刷新成功。"
-      ]
-    },
-    {
-      "area": "Parquet 数据仓储补全",
+      "area": "配置 API 的 ModelGateway 惰性化",
       "feasibility": "高",
       "assumptions": [
-        "DatasetConfig 已提供分区与文件命名规则，可直接复用。",
-        "现有测试主要验证列名、分区结构与写入幂等性，需求清晰。"
+        "现有 ModelGateway 构造函数已支持注入 session_factory/client，可复用。",
+        "config_models 只在 `_refresh_gateway_from_db` 与 `/metrics` 中用到网关，可集中更改。"
       ],
       "risks": [
-        "records 中日期/时间字段格式不统一，需在写入前做解析与校验。",
-        "并发写入可能触发读写竞争，需要确认是否需锁机制。"
+        "惰性实现若未考虑并发，可能出现多线程重复创建或状态覆盖。",
+        "tests/api/test_config_models.py 依赖 monkeypatch 覆盖 `gateway` 变量，需要保持兼容。"
       ],
       "mitigations": [
-        "实现私有 helper 统一 parse 日期与 datetime，并在测试中覆盖多个输入类型。",
-        "短期内保持串行写入，记录潜在并发需求于文档；如必要可引入基于文件锁的保护。"
+        "通过模块级 `_get_gateway()` 配合 `typing.Optional` 实现单例，并使用简易锁/判断避免重复创建。",
+        "保留 `gateway` 全局变量，惰性函数仅在其为 None 时实例化，从而让测试仍可注入 stub。"
+      ]
+    },
+    {
+      "area": "配置 API 验证与文档同步",
+      "feasibility": "中高",
+      "assumptions": [
+        "pytest 子集 tests/api/test_config_models.py 已具备完整桩依赖，可以在无数据库环境运行。",
+        "docs/重构计划.md、verification.md、.codex/testing.md 均可由本次迭代直接更新。"
+      ],
+      "risks": [
+        "pytest 仍可能因为其他 import 副作用或环境变量缺失而卡住，需要提供最小运行命令。",
+        "文档更新若未同步 operations-log/testing 细节，可能造成后续追踪缺口。"
+      ],
+      "mitigations": [
+        "使用与此前分组一致的命令运行 pytest，并在失败时记录日志/原因。",
+        "在 docs/重构计划.md 与 verification.md 中明确记录修复前后的风险与测试命令，同时在 .codex/testing.md 留痕。"
       ]
     }
   ]

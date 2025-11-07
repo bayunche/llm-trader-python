@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-11-05T13:50:49+08:00",
+  "timestamp": "2025-11-07T12:12:05+08:00",
   "requester": "user",
   "agent": "Codex",
-  "summary": "在已完成的 PostgreSQL 数据层与观测构建基础上，继续落实任务 2 剩余事项：自动导出调度配置、补齐账户快照采集，并同步文档与测试。",
+  "summary": "依据《详细方案.md》《项目需求.md》与 docs/重构计划.md，继续推进任务 3，优先解除 config_models API 因 ModelGateway 导入副作用造成的 pytest 超时，并同步文档验证。",
   "objectives": [
-    "根据 TradingSettings/SchedulerSettings 自动生成 scheduler JSON，替换手工维护的 config/scheduler.prod.json",
-    "实现账户快照采集与调度集成，确保 ObservationBuilder 获取实时资金与持仓数据",
-    "更新 docs/重构计划.md、scheduler 文档与验证记录，保持交付可追溯"
+    "将 config_models 模块改为惰性实例化 ModelGateway，避免导入阶段连接 PostgreSQL。",
+    "恢复 tests/api/test_config_models.py 的可运行性，并在验证记录中登记结果。",
+    "更新 docs/重构计划.md、verification.md、.codex/testing.md，反映任务 3 的最新进度与测试策略。"
   ],
   "constraints": [
     "遵循 AGENTS.md 与项目文档要求，禁止新增非标准化组件",
@@ -14,8 +14,8 @@
     "保持现有测试体系（pytest、compileall）全部通过"
   ],
   "deliverables": [
-    "scheduler 导出模块/脚本与更新后的配置文件",
-    "账户快照采集任务及其调度入口、验证测试",
-    "文档与日志更新（docs/重构计划.md、docs/scheduler.md、.codex/testing.md 等）"
+    "惰性化的 config_models API 与必要的单元测试调整",
+    "通过记录的 tests/api/test_config_models.py 执行日志",
+    "更新后的 docs/重构计划.md、verification.md、.codex/testing.md、operations-log.md"
   ]
 }

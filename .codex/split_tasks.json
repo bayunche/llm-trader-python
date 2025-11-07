@@ -3,63 +3,73 @@
   "reason": "shrimp-task-manager 工具缺失，人工拆解任务。",
   "tasks": [
     {
-      "id": "T0",
-      "title": "修复 SQLModel Integer/Float 类型",
-      "milestone": "M0 SQLModel 修复",
+      "id": "T6",
+      "title": "惰性化 config_models 的 ModelGateway",
+      "milestone": "M6 Gateway Lazy Init",
       "deliverables": [
-        "定位 pytest 报错的字段与表",
-        "更新 SQLModel 定义并同步迁移说明",
-        "记录测试结果与风险评估"
+        "将 `gateway` 变量改为可为 None 的单例，并新增 `_get_gateway()` 辅助函数",
+        "更新 `_refresh_gateway_from_db` 与 `/metrics` 路由使用惰性实例",
+        "补充必要注释说明注入方式，保持测试友好"
       ]
     },
     {
-      "id": "T1",
-      "title": "整理模型网关与 Actor/Checker 设计",
-      "milestone": "M1 设计对齐",
+      "id": "T7",
+      "title": "恢复配置 API pytest",
+      "milestone": "M7 Config API Verification",
       "deliverables": [
-        "模型网关配置字段与接口说明",
-        "Actor/Checker JSON Schema 草案",
-        "依赖清单与测试策略（含 SQLModel 回归）"
+        "执行 `tests/api/test_config_models.py` 并记录命令/结果",
+        "分析若仍失败的原因并给出处理或风险评估",
+        "在 .codex/testing.md 写入本次运行日志"
       ]
     },
     {
-      "id": "T2",
-      "title": "实现模型网关服务",
-      "milestone": "M2 模型网关实现",
+      "id": "T8",
+      "title": "更新计划与验证文档",
+      "milestone": "M8 Documentation Sync",
       "deliverables": [
-        "完善 OpenAI 兼容网关（熔断、指标、配置刷新）",
-        "端点配置与熔断逻辑单元测试",
-        "文档中新增网关使用指引"
+        "在 docs/重构计划.md 标注任务 3 的最新动作与状态",
+        "在 verification.md 记录测试结论与风险",
+        "同步 operations-log 与其他必要日志文件"
       ]
     },
     {
-      "id": "T3",
-      "title": "搭建 Actor/Checker 服务层",
-      "milestone": "M3 Actor/Checker 服务",
+      "id": "T9",
+      "title": "交付 LLM 调用审计 API",
+      "milestone": "M9 LLM Audit API",
       "deliverables": [
-        "Pydantic Schema 与校验逻辑",
-        "Actor/Checker 服务与模型网关集成并串联审计",
-        "覆盖 datetime 序列化等场景的单元测试"
+        "新增 /api/monitor/llm-calls 路由及 Schema，支持 role/provider/decision_id/since 过滤",
+        "补充单元测试覆盖 API 输出与鉴权",
+        "文档与验证记录说明新接口和监控用法"
       ]
     },
     {
-      "id": "T4",
-      "title": "集成 orchestrator 与测试修复",
-      "milestone": "M4 集成与验证",
+      "id": "T10",
+      "title": "扩展风险闭环测试",
+      "milestone": "M10 Risk Gate Closure Tests",
       "deliverables": [
-        "orchestrator/manager 接入新服务",
-        "pytest 回归（记录运行结果与待办）",
-        "文档与验证记录更新"
+        "在 trading/manager 或 tasks/managed_cycle 层新增集成测试，模拟 ModelGateway settings 更新后 RiskPolicy 仍记录 RiskResult/DecisionLedger",
+        "补充 DecisionService/RiskPolicy 单元测试覆盖边界（如风险拒绝、alerts 写入）",
+        "在 docs/monitoring 或 verification 中记录新的闭环验证方法"
       ]
     },
     {
-      "id": "T5",
-      "title": "补齐 Parquet 数据仓储与数据测试",
-      "milestone": "M5 数据仓储补全",
+      "id": "T11",
+      "title": "交付 DecisionLedger API",
+      "milestone": "M11 Decision Ledger API",
       "deliverables": [
-        "实现 ParquetRepository 缺失的写入接口",
-        "修复数据模块测试依赖（如缺失 import）",
-        "记录并执行数据层 pytest 结果与风险评估"
+        "新增 `/api/trading/decisions` 列表接口与（可选）详情接口，支持 strategy_id/session_id/status/since 限制",
+        "同步 Pydantic Schema、文档与单元测试，验证 risk_summary/decision_status 输出正确",
+        "在 verification.md/.codex/testing.md 记录运行命令与结果"
+      ]
+    },
+    {
+      "id": "T12",
+      "title": "决策详情 + 执行闭环测试",
+      "milestone": "M12 Decision Detail & Execution Tests",
+      "deliverables": [
+        "实现 `/api/trading/decisions/{decision_id}` 接口，返回 Actions/Checker/Risk/LLM trace",
+        "新增执行层单测，确保 RiskPolicy 拒绝时 ExecutionAdapter 不发起下单",
+        "更新文档与验证记录，标记 Task 4/5 收尾"
       ]
     }
   ]

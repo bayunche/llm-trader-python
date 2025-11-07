@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -19,10 +19,11 @@ from llm_trader.api.security import require_api_key
 from llm_trader.db.models.config import ModelEndpoint
 from llm_trader.db.session import session_scope
 from llm_trader.model_gateway import ModelEndpointSettings, ModelGateway, ModelGatewaySettings
+from llm_trader.model_gateway.loader import build_gateway_settings_from_records
 
 
 router = APIRouter(prefix="/config/models", tags=["config"], dependencies=[Depends(require_api_key)])
-gateway = ModelGateway()
+gateway: Optional[ModelGateway] = None
 
 
 class ModelEndpointUpsertRequest(BaseModel):
@@ -46,39 +47,6 @@ class ModelEndpointUpsertRequest(BaseModel):
 
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
-
-
-def _records_to_settings(records: List[ModelEndpoint]) -> ModelGatewaySettings:
-    endpoints: List[ModelEndpointSettings] = []
-    for record in records:
-        routing = record.routing or {}
-        retry = record.retry_policy or {}
-        cost = record.cost_estimate or {}
-        endpoints.append(
-            ModelEndpointSettings(
-                name=record.model_alias,
-                base_url=record.endpoint_url,
-                api_key=record.auth_secret_ref or None,
-                weight=float(routing.get("weight", 1.0) or 1.0),
-                timeout=float(retry.get("timeout", 30.0) or 30.0),
-                max_retries=int(retry.get("max_retries", 2) or 2),
-                enabled=record.enabled,
-                prompt_cost_per_1k=float(cost.get("prompt_cost_per_1k", 0.0) or 0.0),
-                completion_cost_per_1k=float(cost.get("completion_cost_per_1k", 0.0) or 0.0),
-                default_params=record.default_params or {},
-                headers=record.metadata or {},
-                circuit_breaker=record.circuit_breaker or {},
-            )
-        )
-    from llm_trader.config import get_settings
-
-    settings = get_settings().model_gateway
-    return ModelGatewaySettings(
-        enabled=settings.enabled,
-        default_model=settings.default_model,
-        audit_enabled=settings.audit_enabled,
-        endpoints=endpoints or settings.endpoints,
-    )
 
 
 def _record_to_payload(record: ModelEndpoint) -> ModelEndpointItem:
@@ -108,7 +76,7 @@ def _record_to_payload(record: ModelEndpoint) -> ModelEndpointItem:
 def _refresh_gateway_from_db() -> None:
     with session_scope() as session:
         records = session.exec(select(ModelEndpoint)).all()
-    gateway.update_settings(_records_to_settings(records))
+    _get_gateway().update_settings(build_gateway_settings_from_records(records))
 
 
 @router.get("", response_model=ModelEndpointListResponse)
@@ -169,5 +137,13 @@ async def upsert_model_endpoint(request: ModelEndpointUpsertRequest) -> ModelEnd
 
 @router.get("/metrics", response_model=ModelEndpointMetricsResponse)
 async def model_gateway_metrics() -> ModelEndpointMetricsResponse:
-    metrics = gateway.metrics_snapshot()
+    metrics = _get_gateway().metrics_snapshot()
     return ModelEndpointMetricsResponse(code="OK", message="success", data=metrics)
+
+def _get_gateway() -> ModelGateway:
+    """延迟创建模型网关，避免模块导入阶段即连接数据库。"""
+
+    global gateway
+    if gateway is None:
+        gateway = ModelGateway()
+    return gateway

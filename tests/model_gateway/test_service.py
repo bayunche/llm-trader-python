@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Dict
+
+import pytest
 import respx
 from httpx import Response
-import pytest
 
 from llm_trader.db.models.enums import ModelRole
 from llm_trader.model_gateway import ModelEndpointSettings, ModelGateway, ModelGatewaySettings
@@ -118,3 +120,23 @@ def test_chat_completions_fallback_on_failure(monkeypatch: pytest.MonkeyPatch) -
 
     recorded = factory.session.records[0]
     assert isinstance(recorded.prompt_hash, str)
+
+
+def test_model_gateway_loads_settings_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    endpoint = ModelEndpointSettings(name="auto", base_url="https://auto-llm")
+    resolved = ModelGatewaySettings(endpoints=[endpoint])
+    factory = _StubSessionFactory()
+    called: Dict[str, bool] = {}
+
+    def fake_loader(session_factory):
+        assert session_factory is factory
+        called["loader"] = True
+        return resolved
+
+    monkeypatch.setattr("llm_trader.model_gateway.service.load_gateway_settings", fake_loader)
+    gateway = ModelGateway(session_factory=factory)
+    try:
+        assert gateway.settings.endpoints[0].name == "auto"
+        assert called.get("loader")
+    finally:
+        gateway.close()

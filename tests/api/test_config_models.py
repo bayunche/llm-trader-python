@@ -92,7 +92,7 @@ def _patch_dependencies(monkeypatch):
     monkeypatch.setattr(config_models, "ModelEndpoint", _StubModelEndpoint)
     monkeypatch.setattr(config_models, "select", lambda *args, **kwargs: None)
     monkeypatch.setattr(config_models, "session_scope", lambda: fake_scope())
-    monkeypatch.setattr(config_models, "_records_to_settings", fake_records_to_settings)
+    monkeypatch.setattr(config_models, "build_gateway_settings_from_records", fake_records_to_settings)
     yield stub_gateway, stub_session
     monkeypatch.delenv("LLM_TRADER_API_KEY", raising=False)
 

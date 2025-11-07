@@ -1,0 +1,25 @@
+{
+    "timestamp": "2025-11-07T15:15:20+08:00",
+    "context": [
+        "Task 5 要求交付 DecisionLedger/RiskResult 审计查询接口，与 /api/monitor/llm-calls 互补",
+        "当前已有数据库表 decision_ledger / risk_results / decisions / decision_actions；API 侧 trading.py 仅提供 orders/trades/equity/log/history，缺少决策级审计",
+        "需要一个 `/api/trading/decisions`（列表）与可选 `/api/trading/decisions/{decision_id}` 详情，返回决策状态、风控摘要、关联模型等信息，并支持基础过滤"
+    ],
+    "analysis": [
+        "新增 schema：DecisionLedgerItem（decision_id、status、actor_model、checker_model、risk_summary、alerts、executed_at、created_at）+ RiskResult info（passed/reasons/corrections）",
+        "列表路由 /api/trading/decisions：支持 strategy_id/session_id/status/limit/since 过滤，按 created_at desc；详情路由可附带 decision_actions/CheckerResult 视需求",
+        "实现时需 JOIN/子查询 risk_results、decisions；可分两次查询：先查 ledger，再批量获取 risk_results by decision_id",
+        "单元测试：mock session_scope + sample records，验证 filters & response fields；同时更新 docs/monitoring.md & docs/重构计划.md & verification/testing"
+    ],
+    "next_steps": [
+        "扩展 schemas（DecisionLedgerItem、DecisionLedgerResponse、RiskResultItem）",
+        "实现 routes/trading.py 内的新 endpoint，或拆到新文件 `routes/decisions.py` 并注册，重用现有 API Key",
+        "编写 tests/api/test_trading_decisions.py，使用 stub session_scope 返回 ledger/risk 数据，验证过滤",
+        "更新文档和日志"
+    ],
+    "risks": [
+        "DecisionLedger 表字段较多，需要注意 JSONB risk_summary 的序列化",
+        "可能需要 pagination；若暂不实现 page 参数，至少 enforce limit ≤ 200",
+        "JOIN risk_results 可能在真实 DB 上消耗大，但初版可接受（limit 200 + created_at index）"
+    ]
+}

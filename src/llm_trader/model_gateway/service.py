@@ -16,6 +16,7 @@ from llm_trader.db.models import LLMCallAudit
 from llm_trader.db.models.enums import ModelRole
 from llm_trader.db.session import create_session_factory
 from llm_trader.model_gateway.config import ModelEndpointSettings, ModelGatewaySettings
+from llm_trader.model_gateway.loader import load_gateway_settings
 LOGGER = logging.getLogger("llm_trader.model_gateway")
 
 
@@ -47,15 +48,15 @@ class ModelGateway:
         session_factory=None,
         client: Optional[httpx.Client] = None,
     ) -> None:
+        if session_factory is None:
+            session_factory = create_session_factory()
+        self._session_factory = session_factory
         if settings is None:
-            from llm_trader.config import get_settings  # 动态导入避免循环依赖
-
-            resolved_settings = get_settings().model_gateway
+            resolved_settings = load_gateway_settings(self._session_factory)
         else:
             resolved_settings = settings
         self._settings = resolved_settings
         self._stats: Dict[str, EndpointStats] = {endpoint.name: EndpointStats() for endpoint in resolved_settings.endpoints}
-        self._session_factory = session_factory or create_session_factory()
         timeout = self._max_timeout(resolved_settings)
         self._client = client or httpx.Client(timeout=timeout or 30.0)
 

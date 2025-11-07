@@ -1,17 +1,14 @@
 {
   "known": [
-    "调度配置已可根据 TradingSettings 自动导出，并包含行情、账户快照与 managed cycle 任务。",
-    "账户快照通过 AccountSnapshotPipeline 与 DataIngestionService.sync_account_snapshot 写入 PostgreSQL。",
-    "模型调用目前仍由 LLMStrategyGenerator 直接访问 OpenAI，无集中路由或审计逻辑。",
-    "项目需求对 Actor/Checker 输出的 JSON Schema 与审计字段有明确要求。",
-    "模型网关服务与配置 API 草案已经提交，包含熔断统计与 metrics 快照接口。"
+    "配置 API（src/llm_trader/api/routes/config_models.py）在模块顶层实例化 ModelGateway，并在 upsert 后调用 _refresh_gateway_from_db 刷新内存配置。",
+    "ModelGateway 默认通过 create_session_factory 连接 PostgreSQL；在本地无数据库时连接会长时间等待。",
+    "tests/api/test_config_models.py 依赖 monkeypatch.setattr(config_models, \"gateway\", stub_gateway) 注入桩实现。",
+    "managed_cycle/_ensure_decision_services 会在需要时再创建 ModelGateway/Actor/Checker 服务，说明系统其他部分已经采用惰性模式。"
   ],
   "unknown": [
-    "高优先级：哪些 SQLModel 字段仍使用不兼容的 Integer/Float 定义，导致 pytest 报错？修复后是否需同步 Alembic 迁移或测试夹具？",
-    "高优先级：Actor/Checker 服务需要怎样的服务层边界与审计落库流程，才能与模型网关新 API 集成？",
-    "中优先级：模型网关熔断与指标需要暴露给哪些调用者（API、Prometheus、文档示例），具体格式如何？",
-    "中优先级：决策链路中的调用审计应如何串联到 DecisionLedger 以及数据库中的 LLMCallAudit？",
-    "高优先级：ParquetRepository 的日线/分钟线写入接口需要怎样的列与分区约束，才能满足数据仓储测试读取？"
+    "高优先级：如何在 config_models 中实现惰性 gateway 获取，既避免导入即连库，又保持 test_config_models 通过 monkeypatch 替换 gateway 的能力？",
+    "中优先级：惰性 gateway 引入后，是否需要暴露 reset/close 钩子，供测试或配置更新后重建 httpx.Client 与统计数据？",
+    "中优先级：文档与验证记录应如何描述本次修复——需要在 docs/重构计划.md 中将 Task 3 的阻塞点标记为已解决，还是单独新增一条备注？"
   ],
-  "notes": "接下来需集中分析《项目需求.md》第5.2-5.7节及 db/models 下的字段定义，摸清待修复的类型问题；并梳理模型网关 API、Actor/Checker 服务与审计落库的集成点。"
+  "notes": "聚焦 config_models 模块的初始化副作用与测试策略；完成惰性化后应验证 API、managed_cycle 与决策服务之间的依赖是否仍能正确刷新。"
 }

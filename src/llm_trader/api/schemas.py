@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+from llm_trader.db.models.enums import DecisionStatus, ModelRole
 
 T = TypeVar("T")
 
@@ -233,3 +234,81 @@ class ModelEndpointMetricsResponse(APIResponse[List[ModelEndpointMetric]]):
 ModelEndpointListResponse.model_rebuild()
 ModelEndpointResponse.model_rebuild()
 ModelEndpointMetricsResponse.model_rebuild()
+
+
+class LLMCallAuditItem(BaseModel):
+    trace_id: str
+    decision_id: Optional[str] = None
+    role: ModelRole
+    provider: str
+    model: str
+    tokens_prompt: int
+    tokens_completion: int
+    latency_ms: int
+    cost: float
+    created_at: datetime
+
+
+class LLMCallAuditResponse(APIResponse[List[LLMCallAuditItem]]):
+    pass
+
+
+class RiskResultItem(BaseModel):
+    decision_id: str
+    passed: bool
+    reasons: List[str] = Field(default_factory=list)
+    corrections: List[str] = Field(default_factory=list)
+    evaluated_at: datetime
+
+
+class DecisionLedgerItem(BaseModel):
+    decision_id: str
+    status: DecisionStatus
+    observation_ref: str
+    actor_model: str
+    checker_model: str
+    risk_summary: Dict[str, Any]
+    created_at: datetime
+    executed_at: Optional[datetime] = None
+    risk_result: Optional[RiskResultItem] = None
+
+
+class DecisionLedgerResponse(APIResponse[List[DecisionLedgerItem]]):
+    pass
+
+
+class DecisionActionItem(BaseModel):
+    type: str
+    symbol: Optional[str] = None
+    side: Optional[str] = None
+    order_type: Optional[str] = None
+    price: Optional[float] = None
+    qty: Optional[int] = None
+    tif: Optional[str] = None
+    target_order_id: Optional[str] = None
+
+
+class CheckerResultItem(BaseModel):
+    status: str
+    reasons: List[str] = Field(default_factory=list)
+    observation_expired: bool = False
+    checked_at: datetime
+
+
+class DecisionDetailItem(BaseModel):
+    decision_id: str
+    status: DecisionStatus
+    timestamp: datetime
+    observation_ref: str
+    actor_model: str
+    checker_model: str
+    notes: Optional[str] = None
+    actions: List[DecisionActionItem] = Field(default_factory=list)
+    checker_result: Optional[CheckerResultItem] = None
+    risk_result: Optional[RiskResultItem] = None
+    ledger: Optional[DecisionLedgerItem] = None
+    llm_calls: List[LLMCallAuditItem] = Field(default_factory=list)
+
+
+class DecisionDetailResponse(APIResponse[DecisionDetailItem]):
+    pass

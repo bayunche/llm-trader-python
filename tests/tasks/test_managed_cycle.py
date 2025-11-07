@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from llm_trader.trading import ManagedTradingResult, RiskDecision, TradingSession, TradingSessionConfig
 from llm_trader.trading.orchestrator import TradingCycleConfig
 from llm_trader.trading.policy import RiskPolicy, RiskThresholds
+from llm_trader.model_gateway import ModelEndpointSettings, ModelGatewaySettings
 import llm_trader.tasks.managed_cycle as managed_cycle
 from llm_trader.tasks.managed_cycle import run_cycle
 from tests.trading.test_manager import ManagerFakeGenerator
@@ -212,6 +214,57 @@ def test_ensure_trading_config_with_lookback(monkeypatch: pytest.MonkeyPatch) ->
     assert config.history_end == fixed_now
     assert config.history_start == fixed_now - timedelta(days=5)
 
+
+def test_ensure_decision_services_refreshes_on_settings_change(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings_a = ModelGatewaySettings(
+        endpoints=[ModelEndpointSettings(name="a", base_url="https://a.example.com")]
+    )
+    settings_b = ModelGatewaySettings(
+        endpoints=[ModelEndpointSettings(name="b", base_url="https://b.example.com")]
+    )
+    loader_calls = {"count": 0}
+
+    def fake_loader(_factory):
+        idx = loader_calls["count"]
+        loader_calls["count"] += 1
+        return settings_a if idx == 0 else settings_b
+
+    class StubGateway:
+        def __init__(self, *, settings, session_factory):
+            self.settings = settings
+            self.session_factory = session_factory
+
+    class StubActor:
+        def __init__(self, gateway):
+            self.gateway = gateway
+
+    class StubChecker:
+        def __init__(self, gateway):
+            self.gateway = gateway
+
+    class StubDecisionService:
+        def __init__(self, session_factory=None):
+            self.session_factory = session_factory
+
+    monkeypatch.setattr(managed_cycle, "load_gateway_settings", fake_loader)
+    monkeypatch.setattr(managed_cycle, "ModelGateway", StubGateway)
+    monkeypatch.setattr(managed_cycle, "ActorService", StubActor)
+    monkeypatch.setattr(managed_cycle, "CheckerService", StubChecker)
+    monkeypatch.setattr(managed_cycle, "DecisionService", StubDecisionService)
+    managed_cycle._MODEL_GATEWAY = None
+    managed_cycle._ACTOR_SERVICE = None
+    managed_cycle._CHECKER_SERVICE = None
+    managed_cycle._DECISION_SERVICE = None
+
+    factory = object()
+    actor_a, checker_a, decision_a = managed_cycle._ensure_decision_services(factory)
+    actor_b, checker_b, decision_b = managed_cycle._ensure_decision_services(factory)
+
+    assert actor_a.gateway.settings.endpoints[0].name == "a"
+    assert actor_b.gateway.settings.endpoints[0].name == "b"
+    assert actor_a is not actor_b
+    assert checker_a is not checker_b
+    assert decision_a is not decision_b
 
 def test_sync_account_snapshot_job(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {}

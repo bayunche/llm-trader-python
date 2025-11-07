@@ -1,19 +1,19 @@
 {
   "interface_contract": {
     "checked": true,
-    "notes": "DataIngestionService/ObservationBuilder/run_cycle 链路明确；ParquetRepository 写入接口需遵循 DatasetConfig（freq/symbol 分区、列名规范）；模型网关、ActorService、CheckerService 的 JSON Schema 与数据库审计字段已在《项目需求.md》第5.2-5.5节梳理。"
+    "notes": "配置 API 需暴露 GET/PUT /api/config/models 及 /metrics，并返回 ModelEndpointItem/metrics JSON；Actor/Checker 服务的输入输出结构已在《项目需求.md》5.2-5.5 描述，与 DecisionService/ObservationBuilder 契约明确。"
   },
   "tech_choices": {
     "checked": true,
-    "notes": "继续使用 Python 3.10、FastAPI、SQLModel、Redis；模型网关沿用 httpx + 自研熔断统计，Actor/Checker 使用 Pydantic 校验与 ModelGateway 调用；SQLModel 类型统一采用 SQLAlchemy Column(Integer/Float)。"
+    "notes": "继续使用 FastAPI+SQLModel 处理配置存储，ModelGateway 仍使用 httpx + 自研熔断；惰性化仅调整初始化模式，不引入新依赖。"
   },
   "risks_identified": {
     "checked": true,
-    "notes": "主要风险：SQLModel 字段类型若仍不一致会阻断 pytest；ParquetRepository 写入方法若列名不匹配会导致数据质量测试失败；Actor/Checker JSON dumps 对 datetime 处理需要兜底；模型网关熔断与配置 API 引入后必须避免循环依赖与状态不一致。"
+    "notes": "若惰性 gateway 实现不当可能导致并发下重复创建或测试无法注入 stub；若 _refresh_gateway_from_db 未使用最新实例则配置更新失效；需注意保持 session_scope 上下文管理正确关闭。"
   },
   "verification_strategy": {
     "checked": true,
-    "notes": "先运行 env PYTHONPATH=src python -m pytest 定位/验证 SQLModel 与数据仓储修复；为 Actor/Checker 服务补充单测覆盖 datetime/审计场景；API 层使用 TestClient 覆盖模型配置与 metrics，另通过 compileall 保证语法。"
+    "notes": "完成修改后运行 `PYTHONPATH=.codex/vendor:src DATABASE_URL=sqlite:///tmp/full-test.db REDIS_ENABLED=0 python3 -m pytest tests/api/test_config_models.py -vv` 验证 API；必要时补充 lighter 调用以确保导入不触发 DB 连接，并更新 verification.md/.codex/testing.md。"
   },
   "status": "ready_for_planning"
 }

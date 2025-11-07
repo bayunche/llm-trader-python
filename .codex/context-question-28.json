@@ -1,0 +1,24 @@
+{
+    "question": "如何在 config_models API 中惰性化 ModelGateway，既避免导入即连接 PostgreSQL，又保持测试可注入 stub？",
+    "why_important": "当前模块在 import 时创建 ModelGateway，会通过 create_session_factory 连接数据库；本地无 DB 时导致 tests/api/test_config_models.py 阻塞 600s，阻碍重构计划任务 3 的验证。",
+    "inspection": {
+        "files_reviewed": [
+            "src/llm_trader/api/routes/config_models.py",
+            "src/llm_trader/model_gateway/service.py",
+            "src/llm_trader/db/session.py",
+            "tests/api/test_config_models.py",
+            "src/llm_trader/tasks/managed_cycle.py"
+        ],
+        "findings": [
+            "config_models.py 顶层执行 `gateway = ModelGateway()`，会立即触发 create_session_factory 实例化 SQLAlchemy Session。",
+            "ModelGateway 构造函数在没有自定义 session_factory 时会创建到 PostgreSQL 的连接池，若未启动数据库则长时间等待。",
+            "tests/api/test_config_models.py 通过 monkeypatch.setattr(config_models, \"gateway\", stub_gateway) 替换全局变量，前提是变量存在且不在内部重新赋值。",
+            "managed_cycle/_ensure_decision_services() 使用懒加载模式（全局变量初始为 None），在需要时才创建 ModelGateway/Actor/Checker。"
+        ]
+    },
+    "next_actions": [
+        "将 config_models.py 中的 `gateway` 初始化改为 `None`，新增 `_get_gateway()` 封装延迟创建逻辑并复用同一实例。",
+        "在 `_refresh_gateway_from_db` 与 `/metrics` 路由中改用 `_get_gateway()`，同时保留 `gateway` 变量以便测试用 monkeypatch 覆盖。",
+        "为惰性 gateway 增加 type hints/Docstring，说明可注入 stub；更新 docs/重构计划.md 与验证记录，标注配置 API 阻塞已解除。"
+    ]
+}

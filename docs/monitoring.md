@@ -60,6 +60,29 @@
   - 可结合 Prometheus 或内部监控周期获取，推荐在仪表盘中展示。
 - 所有响应遵循 `ModelEndpointListResponse`/`ModelEndpointResponse`/`ModelEndpointMetricsResponse` 的包装格式，便于前端/脚本统一解析。
 
+## 模型调用审计 API
+
+- **接口**：`GET /api/monitor/llm-calls`
+  - 支持查询参数：
+    - `limit`（默认 50，最大 500）：返回的记录数量，按 `created_at` 倒序。
+    - `decision_id`：仅返回指定决策关联的调用。
+    - `role`：`actor`、`checker` 等，区分调用来源。
+    - `provider`：模型提供方，如 `openai`、`azure`。
+    - `since`：ISO8601 时间戳，仅返回此时间之后的记录。
+  - 响应数据包含 `trace_id`、`decision_id`、`role`、`provider`、`model`、`tokens_prompt`、`tokens_completion`、`latency_ms`、`cost`、`created_at` 等字段，封装在 `LLMCallAuditResponse` 中。
+- **用途**：仪表盘或 Prometheus 抓取 Agent 模型调用日志，分析 Actor/Checker 的延迟、成本、token 消耗，可结合 `decision_id` 追溯到决策总账。
+- **鉴权**：同其它 API，一律通过 `X-API-Key`。
+
+## 决策审计 API
+
+- **接口**：`GET /api/trading/decisions`
+  - 查询决策总账（DecisionLedger）与风控结论（RiskResult），默认返回最近 50 条，可通过 `limit`（≤200）、`status`（如 `executed`/`rejected_risk`）、`since`（UTC 时间）过滤。
+  - 响应每条记录包含：`decision_id`、`status`、`observation_ref`、`actor_model`、`checker_model`、`risk_summary`、`created_at`、`executed_at`，以及嵌套的 `risk_result`（`passed`、`reasons`、`corrections`、`evaluated_at`）。
+  - 可用于仪表盘展示最近的 Actor/Checker → Risk → Execution 闭环信息，或导出审计报表。
+- **接口**：`GET /api/trading/decisions/{decision_id}`
+  - 返回指定决策的完整细节：`DecisionAction` 列表、`CheckerResult`、`RiskResult`、`DecisionLedger` 摘要、备注等，可辅以后续扩展（例如关联 LLM trace）。
+  - 结合 `/api/monitor/llm-calls` 可实现“从决策到模型调用”的追溯闭环。
+
 ## 决策审计与风险指标
 
 - **数据库表**：

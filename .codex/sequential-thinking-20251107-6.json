@@ -1,0 +1,23 @@
+{
+    "timestamp": "2025-11-07T14:40:10+08:00",
+    "context": [
+        "重构计划任务 3 仍在进行，需要让模型网关配置在 API、调度与任务执行间保持一致，并能在无数据库环境下顺利测试",
+        "config_models API 已实现惰性实例化，但其他模块（managed_cycle）仍直接使用 App settings，无法感知数据库变更",
+        "需要统一配置加载逻辑并补齐单元测试/文档记录"
+    ],
+    "reasoning": [
+        "提取 model_gateway.loader 负责从数据库记录构造 ModelGatewaySettings，并在失败时回退默认值",
+        "API 的刷新逻辑与调度任务都应使用 loader，确保 config_models upsert 后可即时拦截变更"
+        "新增 loader 单测验证记录转换及异常回退，并运行 managed_cycle 分组 pytest 防止回归"
+    ],
+    "plan": [
+        "实现 loader 模块并在 config_models/managed_cycle 中引用",
+        "更新 tests/api/test_config_models.py patch 逻辑，新增 loader 单测",
+        "运行相关 pytest（loader、config_models、managed_cycle）并同步文档/验证记录"
+    ],
+    "risks": [
+        "SQLModel ORM 初始化慢，单测需避免直接实例化真实模型",
+        "managed_cycle 需处理 session_factory 为 None 的情况，避免在任务启动前引用空值",
+        "文档/测试记录若未及时更新，会导致任务 3 状态与事实脱节"
+    ]
+}

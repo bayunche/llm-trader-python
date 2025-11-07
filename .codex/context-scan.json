@@ -1,172 +1,97 @@
 {
-  "scan_timestamp": "2025-11-06T09:34:49+08:00",
+  "scan_timestamp": "2025-11-07T12:10:45+08:00",
   "areas": [
     {
-      "name": "模型网关与决策服务",
+      "name": "模型网关配置 API",
       "locations": [
-        "src/llm_trader/strategy/llm_generator.py",
-        "src/llm_trader/trading/orchestrator.py",
-        "src/llm_trader/trading/manager.py",
-        "src/llm_trader/api/routes/trading.py"
+        "src/llm_trader/api/routes/config_models.py",
+        "src/llm_trader/model_gateway/service.py",
+        "src/llm_trader/db/models/config.py",
+        "tests/api/test_config_models.py"
       ],
-      "current_state": "策略生成仍直接调用 OpenAI 客户端，未提供多端点模型网关或调用审计；Actor/Checker 逻辑耦合在 orchestrator/manager 内，缺少与文档定义的 JSON Schema 对齐，也未拆分独立服务或 API。",
+      "current_state": "配置 API 提供 GET/PUT/metrics 路由，但模块级变量在导入时立即实例化 ModelGateway，内部 create_session_factory 会连接 PostgreSQL，导致本地无库时阻塞并引发 pytest 超时。",
       "similar_cases": [
-        "tests/trading/test_orchestrator.py",
-        "tests/trading/test_manager.py",
-        "tests/strategy/test_prompts.py"
+        "src/llm_trader/tasks/managed_cycle.py::_ensure_decision_services()延迟初始化模型网关",
+        "src/llm_trader/api/routes/__init__.py 只在 create_app() 时注册路由",
+        "tests/api/test_config_models.py 使用 monkeypatch 注入 stub gateway"
       ],
       "tech_stack": [
-        "OpenAI SDK",
         "FastAPI",
-        "pydantic",
-        "pandas"
-      ],
-      "tests": [
-        "tests/trading/test_orchestrator.py",
-        "tests/trading/test_manager.py",
-        "tests/strategy/test_prompts.py"
-      ],
-      "notes": "需实现符合 MG/ACT/CHK 要求的服务层与审计落库，重构现有 orchestrator 中的模型调用路径，并补充端到端测试。"
-    },
-    {
-      "name": "Parquet 数据仓储",
-      "locations": [
-        "src/llm_trader/data/repositories/parquet.py",
-        "tests/data/test_trading_repository.py",
-        "tests/data/regression/test_data_quality.py"
-      ],
-      "current_state": "仓储已覆盖 symbols、calendar、ohlcv 通用写入等方法，但缺少测试期望的 write_ohlcv_daily/ write_ohlcv_intraday/ write_quotes 等便捷接口；数据质量回归测试无法直接调用通用写入，导致回归阻塞。",
-      "similar_cases": [
-        "tests/data/test_ohlcv_pipeline.py",
-        "docs/data_store.md",
-        "docs/realtime_data.md"
-      ],
-      "tech_stack": [
-        "pyarrow",
-        "pandas",
+        "SQLModel",
+        "httpx",
         "pytest"
       ],
       "tests": [
-        "tests/data/test_trading_repository.py",
-        "tests/data/regression/test_data_quality.py"
+        "tests/api/test_config_models.py"
       ],
-      "notes": "需按照测试预期提供带符号/频率参数的写入封装，并确保列名、分区结构符合 DatasetConfig 定义，同时修复测试文件的缺失依赖。"
+      "notes": "需将 ModelGateway 变为惰性获取并允许注入，避免导入即尝试数据库连接；修复后需重新运行配置 API 测试并更新验证记录。"
     },
     {
-      "name": "数据库模型字段类型",
+      "name": "Actor/Checker 决策链与调度任务",
       "locations": [
-        "src/llm_trader/db/models/core.py",
-        "src/llm_trader/db/models/audit.py",
-        "src/llm_trader/db/models/market.py",
-        "src/llm_trader/db/models/reference.py"
-      ],
-      "current_state": "近期为规避 SQLModel 导入失败进行过类型调整，但 Integer/Float 对应 SQLAlchemy Column 未完全对齐，pytest 收集阶段仍报类型/方言冲突。",
-      "similar_cases": [
-        "tests/model_gateway/test_service.py",
+        "src/llm_trader/trading/orchestrator.py",
+        "src/llm_trader/trading/manager.py",
+        "src/llm_trader/tasks/managed_cycle.py",
+        "src/llm_trader/decision/service.py",
         "tests/decision/test_actor_service.py"
       ],
+      "current_state": "Actor/Checker 服务已通过 ModelGateway 注入 orchestrator，managed_cycle 在运行时按配置决定是否初始化决策栈，但仍依赖同一个模块全局网关实例；风控评估与 DecisionLedger 记录已串联。",
+      "similar_cases": [
+        "tests/tasks/test_managed_cycle.py（需确认是否覆盖决策路径）",
+        "llm_trader.decision.schema（提供 JSON Schema 校验）",
+        "llm_trader.trading.policy（风险评估实现）"
+      ],
       "tech_stack": [
+        "pydantic",
+        "APScheduler",
         "SQLModel",
-        "SQLAlchemy",
-        "Pydantic"
+        "Redis"
       ],
       "tests": [
-        "env PYTHONPATH=src python -m pytest"
+        "tests/decision/test_actor_service.py",
+        "tests/decision/test_decision_service.py"
       ],
-      "notes": "需梳理所有字段，统一使用 Column(Integer/Float, nullable=...)，确保 Alembic/SQLModel 元数据一致并恢复 pytest。"
+      "notes": "需要确保配置 API 更改后能通过 lazy gateway 及时刷新，再由 managed_cycle/_ensure_decision_services 复用；验证链路需在 docs/重构计划 中标记。"
     },
     {
-      "name": "数据采集与观测链路",
+      "name": "文档与验证记录",
       "locations": [
-        "src/llm_trader/data/ingestion/service.py",
-        "src/llm_trader/observation/service.py",
-        "src/llm_trader/tasks/managed_cycle.py"
+        "docs/重构计划.md",
+        "verification.md",
+        ".codex/testing.md"
       ],
-      "current_state": "已实现 DataIngestionService 写入 PostgreSQL、ObservationBuilder 聚合并缓存观测、managed_cycle 调用 run_managed_trading_cycle；run_cycle 会在每次调度前刷新主表与行情并写回观测日志，目前缺少针对 DataIngestionService 的单元测试与配置驱动的符号选择。",
+      "current_state": "重构计划最后更新时间 2025-11-07 10:12，仅记录主表降级与测试策略；验证记录中仍标注 config_models 分组 pytest 超时。",
       "similar_cases": [
-        "tests/observation/test_observation_builder.py",
-        "tests/tasks/test_managed_cycle.py",
-        "tests/data/test_realtime_quotes.py"
-      ],
-      "tech_stack": [
-        "SQLModel",
-        "Redis",
-        "APScheduler",
-        "Pendulum"
-      ],
-      "tests": [
-        "tests/observation/test_observation_builder.py",
-        "tests/tasks/test_managed_cycle.py",
-        "tests/data/test_realtime_quotes.py"
-      ],
-      "notes": "需补齐 DataIngestionService 级别的覆盖与账号快照写入验证，并依据《详细方案.md》补充观测中 market_rules 与 risk_snapshot 细节及缓存指标对外导出接口。"
-    },
-    {
-      "name": "调度与统一入口",
-      "locations": [
-        "config/scheduler.prod.json",
-        "src/llm_trader/scheduler/manager.py",
-        "scripts/run_scheduler.py",
-        "app.py"
-      ],
-      "current_state": "scheduler.manager 已支持从 JSON/字典启动 APScheduler，config/scheduler.prod.json 提供示例配置，app.py 会在启动时加载该文件并并行运行 Streamlit 仪表盘；重构计划仍要求自动导出调度配置并与 TradingSettings 联动。",
-      "similar_cases": [
-        "docs/scheduler.md",
-        "scripts/run_managed_scheduler.py",
-        "scripts/run_realtime_scheduler.py"
-      ],
-      "tech_stack": [
-        "APScheduler",
-        "JSON",
-        "Subprocess"
-      ],
-      "tests": [],
-      "notes": "需根据 TradingSettings 生成 scheduler JSON（含行情与 managed cycle 的默认任务），并提供命令行或脚本导出能力以满足“待导出调度配置”备注。"
-    },
-    {
-      "name": "需求对齐资料",
-      "locations": [
-        "详细方案.md",
-        "项目需求.md",
-        "docs/重构计划.md"
-      ],
-      "current_state": "三份文档给出了 Actor→Checker→Risk→执行链路、数据模型字段、调度节奏与更新记录；当前代码仅完成 PostgreSQL 数据层和观测生成核心任务 2 的主体逻辑。",
-      "similar_cases": [
-        "docs/realtime_data.md",
-        "docs/scheduler.md",
-        "docs/monitoring.md"
+        "README.md（新增离线依赖说明）",
+        "monitor.md（记录运行监控）",
+        ".codex/operations-log.md（工具使用留痕）"
       ],
       "tech_stack": [
         "Markdown"
       ],
       "tests": [],
-      "notes": "需持续对照文档中的字段与性能指标（如 OBS-01 单次构建≤50ms、缓存 TTL 要求）校准实现细节，并在每次交付后更新 docs/重构计划.md 的任务状态与备注。"
+      "notes": "修复配置 API 后需同步重构计划与验证记录，说明超时问题的解决方案及新的测试命令。"
     }
   ],
   "observation_report": {
     "anomalies": [
-      "数据采集服务尚无直接测试覆盖，account snapshot 写入在当前任务链中缺少触发示例。",
-      "调度配置文件为静态示例，未能根据 TradingSettings 导出或随着配置变化自动更新，与重构计划备注相符。",
-      "观测缓存命中指标仅在日志中暴露，尚无公共 API 或状态文件供调度层引用。",
-      "模型调用路径缺少网关与调用审计，与文档要求的多端点路由和日志字段不符。",
-      "SQLModel 数值字段的 SQLAlchemy Column 定义不统一，引发 pytest 导入/类型错误。"
+      "config_models 模块导入即创建 ModelGateway，create_session_factory 在无 PostgreSQL 服务时阻塞，导致 tests/api/test_config_models.py 挂起 600s。",
+      "Managed cycle 与决策服务复用同一个全局网关实例，若配置 API 刷新失败将导致调度层继续使用旧端点。",
+      "docs/重构计划.md 与 verification.md 尚未记录配置 API 测试超时问题和待办修复，文档滞后于实际风险。"
     ],
     "information_gaps": [
-      "需要明确导出的调度配置应包含哪些必选任务与参数（如 symbols、interval、policy thresholds）。",
-      "需要确认观测构建缓存指标是否需写入 reports/status.json 或 Redis 供仪表盘读取。",
-      "需要确定 DataIngestionService 是否需要从外部注入账号数据还是在调度中增加采集步骤。",
-      "需要梳理模型网关配置结构（端点、权重、熔断、成本统计）及 Actor/Checker JSON Schema 的落库字段。",
-      "需要确认各 SQLModel 表的整数/浮点字段是否需与 Alembic 迁移保持一致仍存在遗漏。"
+      "需确认强化 lazy 初始化后是否仍需允许外部预注入 gateway（例如 CLI/脚本），以兼容已有测试。",
+      "需要界定配置 API 更新后如何通知运行中 managed_cycle——是否依赖 `_refresh_gateway_from_db` 即可还是需额外事件。",
+      "需要决定验证文档中如何记录配置 API 测试（是否单独分组还是纳入 API 章节）。"
     ],
     "suggested_deep_dives": [
-      "梳理 TradingSettings 与 RiskSettings 字段，设计导出调度配置的映射规则。",
-      "检查 docs/realtime_data.md 与 docs/scheduler.md 的验收标准，细化 run_cycle/实时任务需要补充的日志与状态输出。",
-      "回顾 tests/tasks/test_managed_cycle.py 现有断言，规划新增针对调度配置与数据采集流程的测试。",
-      "研读 项目需求.md 第5.2-5.5节，定义 Actor/Checker/Risk Gate 数据结构与 API 契约。"
+      "分析 ModelGateway 初始化链路（create_session_factory、get_settings）以确认惰性模式不破坏现有依赖。",
+      "检查 tests/decision/* 与 tasks/managed_cycle 对 gateway 的引用，确保修改后无需额外 stub。",
+      "梳理 verification.md 与 .codex/testing.md 的记录方式，规划本轮修复后的新增条目。"
     ],
     "tool_notes": {
-      "code_index": "仓库未配置 code-index，已改用 rg/ls 进行检索并在日志中记录。",
-      "sequential_thinking": "sequential-thinking 命令缺失，转而在 .codex/sequential-thinking-20251106-3.json 中记录手动推理。"
+      "sequential_thinking": "命令 sequential-thinking 不存在，已在日志记录失败并改为手动写入 .codex/sequential-thinking-*.json。",
+      "code_index": "环境未提供 code-index，继续通过 rg/ls 获取上下文并在日志标注。"
     }
   }
 }

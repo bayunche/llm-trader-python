@@ -19,6 +19,7 @@ from llm_trader.trading.manager import run_managed_trading_cycle
 from llm_trader.trading.orchestrator import TradingCycleConfig
 from llm_trader.decision import ActorService, CheckerService, DecisionService
 from llm_trader.model_gateway import ModelGateway
+from llm_trader.model_gateway.loader import load_gateway_settings
 
 
 LOGGER = get_logger("tasks.managed_cycle")
@@ -59,13 +60,20 @@ def _ensure_services(symbol_universe_limit: int) -> Tuple[DataIngestionService, 
 def _ensure_decision_services(session_factory):
     """初始化决策服务与模型网关，若未启用则返回空值。"""
 
-    settings = get_settings().model_gateway
+    if session_factory is None:
+        return None, None, None
+
+    settings = load_gateway_settings(session_factory)
     if not settings.enabled or not settings.endpoints:
         return None, None, None
 
     global _MODEL_GATEWAY, _ACTOR_SERVICE, _CHECKER_SERVICE, _DECISION_SERVICE
-    if _MODEL_GATEWAY is None:
-        _MODEL_GATEWAY = ModelGateway(session_factory=session_factory)
+    need_refresh = _MODEL_GATEWAY is None or _MODEL_GATEWAY.settings != settings
+    if need_refresh:
+        _MODEL_GATEWAY = ModelGateway(settings=settings, session_factory=session_factory)
+        _ACTOR_SERVICE = None
+        _CHECKER_SERVICE = None
+        _DECISION_SERVICE = None
     if _ACTOR_SERVICE is None:
         _ACTOR_SERVICE = ActorService(_MODEL_GATEWAY)
     if _CHECKER_SERVICE is None:

@@ -1,0 +1,23 @@
+{
+    "timestamp": "2025-11-07T15:25:20+08:00",
+    "context": [
+        "LLM 调用审计与 DecisionLedger 列表接口已交付，Task 3/5 进入收尾阶段",
+        "Task 4 强调 Risk Gate/执行闭环，Task 5 要求完整审计（可能包含决策详情、动作、风险原因）",
+        "当前空白：缺少 /api/trading/decisions/{decision_id} 的详情、订单动作/Checker 结果的查询，以及对执行结果（orders/trades）与 decision ledger 的关联验证"
+    ],
+    "analysis": [
+        "下一步可实现决策详情接口：返回 Decision、DecisionAction、CheckerResult、RiskResult、LLM 审计 trace，满足合规查看需求",
+        "同时在 Risk Gate 测试中只覆盖策略层，仍缺执行 adapter 层的验证（比如 ExecutionAdapter 接收到 risk reject 时不会下单）——可在 trading/session 或 execution adapter 单测中涵盖",
+        "还需评估文档/Runbook 是否包含如何使用审计 API（docs/monitoring 已更新，Runbook 尚未）"
+    ],
+    "plan": [
+        "设计 `/api/trading/decisions/{decision_id}` schema，包含 actions/risk_result/checker_result/llm traces",
+        "扩展 tests/api/test_trading_decisions.py 覆盖详情接口（使用 stub records）",
+        "若时间允许，补充 RiskPolicy/Execution adapter 测试，确保 risk block 不会调用 adapter.place_order"
+    ],
+    "risks": [
+        "详情接口需关联多张表，SQL 较复杂；为测试需 stub 多个 query",
+        "执行层测试可能需要 mock TradingSession.execute 复杂路径，需控制范围避免测试过重",
+        "需同步文档/验证记录，以免 Task 5/4 状态混乱"
+    ]
+}

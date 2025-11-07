@@ -1,0 +1,24 @@
+{
+    "timestamp": "2025-11-07T15:35:20+08:00",
+    "context": [
+        "/api/trading/decisions 列表已上线，但缺少按 decision_id 查询详情（动作、CheckerResult、LLM trace 等）",
+        "Task 4 仍需执行层测试：确保 RiskPolicy 拒绝后 ExecutionAdapter 不会下单，或在风险通过时能记录 DecisionLedger 状态",
+        "需要对 docs/monitoring、verification 做好相应更新"
+    ],
+    "analysis": [
+        "详情接口设计：`GET /api/trading/decisions/{decision_id}` 返回 Decision、DecisionActions、CheckerResult、RiskResult、DecisionLedger、LLMCallAudit（可选）",
+        "实现上可在 trading 路由内新增 handler，使用 session_scope 查询相关表；为避免 SQL 复杂，可多次查询（decision -> actions -> checker -> risk -> ledger）",
+        "执行层测试：可在 tests/trading/test_manager 或 tests/trading/test_session 中 mock ExecutionAdapter，确保 risk 拒绝时 adapter.place_order 未被调用；或模拟 proceed 时记录 ledger"
+    ],
+    "plan": [
+        "扩展 schemas：DecisionDetailItem、DecisionActionItem、CheckerResultItem",
+        "实现详情路由 + 测试（stub session_scope）",
+        "新增执行层测试（例如 run_managed_trading_cycle 在 decision.proceed=False 时不触发 Session.execute）",
+        "更新文档/验证记录"
+    ],
+    "risks": [
+        "多表查询 stub 复杂度较高，需要精心组织测试",
+        "执行层测试可能牵涉较多 mock，需控制范围避免 brittle",
+        "需确保 API key 保护与 pagination/limit 逻辑一致"
+    ]
+}
